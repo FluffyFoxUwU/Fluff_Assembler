@@ -1,5 +1,7 @@
 #!/bin/sh
-export LUA_PATH="$LUA_PATH;./src/?.lua;./libs/?.lua"
-export LUA_CPATH="$LUA_CPATH;./libs/?.so"
-lua54 ./src/main.lua "$@"
+ROOT=$(dirname $(realparh "$0"))
+export LUA_PATH="$LUA_PATH;$ROOT/src/?.lua;$ROOT/libs/?.lua"
+export LUA_CPATH="$LUA_CPATH;$ROOT/libs/?.so"
+
+lua54 $ROOT/src/main.lua "$@"
 exit $?
