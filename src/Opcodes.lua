@@ -25,7 +25,9 @@ M.Sub = newInstruction(0x0D, "sub", 3)
 M.Mul = newInstruction(0x0E, "mul", 3)
 M.Div = newInstruction(0x0F, "div", 3)
 M.Mod = newInstruction(0x10, "mod", 3)
-M.Pow = newInstruction(0x11, "mod", 3)
+M.Pow = newInstruction(0x11, "pow", 3)
+M.JmpForward = newInstruction(0x12, "jmp_forward", 1)
+M.JmpBackward = newInstruction(0x13, "jmp_backward", 1)
 
 local opcodesList = {}
 local opcodesLookup = {}
