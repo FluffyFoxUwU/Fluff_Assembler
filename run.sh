@@ -1,5 +1,5 @@
 #!/bin/sh
-ROOT=$(dirname $(realparh "$0"))
+ROOT=$(dirname $(realpath "$0"))
 export LUA_PATH="$LUA_PATH;$ROOT/src/?.lua;$ROOT/libs/?.lua"
 export LUA_CPATH="$LUA_CPATH;$ROOT/libs/?.so"
 
