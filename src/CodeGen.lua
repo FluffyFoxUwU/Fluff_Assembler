@@ -91,9 +91,9 @@ for _, key in ipairs(Opcodes.getOpcodesList()) do
   if not proto["emit"..key] then
     proto["emit"..key] = function(self, cond, ...)
       if select("#", ...) > op.fieldsUsed then
-        error(Throwable.new(("Extra unused fields for %s"):format(op.nameInString)))
+        error(Throwable.new(("Extra unused fields for %s"):format(op.name)))
       elseif select("#", ...) < op.fieldsUsed then
-        error(Throwable.new(("Not enough fields for %s"):format(op.nameInString)))
+        error(Throwable.new(("Not enough fields for %s"):format(op.name)))
       end
 
       checkCond(cond)
