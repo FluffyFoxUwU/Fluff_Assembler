@@ -39,16 +39,6 @@ for k, v in pairs(M) do
 end
 
 function M.getOpcodesList()
-
-local opcodesList = {}
-local opcodesLookup = {}
-
-for k, v in pairs(M) do
-  table.insert(opcodesList, k)
-  opcodesLookup[v] = k
-end
-
-function M.getOpcodesList()
   return opcodesList
 end
 
