@@ -22,7 +22,7 @@ end
 
 local function checkCond(reg)
   if not isValidCond(reg) then
-    error(Throwable.new("Invalid conditional flag '%s'"):format(tostring))
+    error(Throwable.new(("Invalid conditional flag '%s'"):format(tostring(reg))))
   end
 end
 
