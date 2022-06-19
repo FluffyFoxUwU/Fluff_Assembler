@@ -28,6 +28,17 @@ M.Mod = newInstruction(0x10, "mod", 3)
 M.Pow = newInstruction(0x11, "pow", 3)
 M.JmpForward = newInstruction(0x12, "jmp_forward", 1)
 M.JmpBackward = newInstruction(0x13, "jmp_backward", 1)
+M.Cmp = newInstruction(0x14, "cmp", 2)
+
+local opcodesList = {}
+local opcodesLookup = {}
+
+for k, v in pairs(M) do
+  table.insert(opcodesList, k)
+  opcodesLookup[v] = k
+end
+
+function M.getOpcodesList()
 
 local opcodesList = {}
 local opcodesLookup = {}
