@@ -1,0 +1,146 @@
+mainmenu "Fluff Assembler Configuration"
+
+menu Debugging
+  config DEBUG
+    bool "Enable debug mode"
+    default n
+    help
+      Enable debugging checks and show debug
+      options
+ 
+  choice
+    prompt "Additional sanitizer"
+    depends on DEBUG && !LLVM_XRAY
+    optional
+
+    config ASAN
+      bool "Enable Address Sanitizer"
+    config TSAN
+      bool "Enable Thread Sanitizer" 
+    config MSAN
+      bool "Enable Memory Sanitizer"
+  endchoice
+  
+  menu "Address Sanitizer"
+    depends on ASAN
+
+    config ASAN_OPTS
+      string "Default ASAN options"
+      default "fast_unwind_on_malloc=0:detect_invalid_pointer_pairs=10:strict_string_checks=1:strict_init_order=1:check_initialization_order=1:print_stats=1:detect_stack_use_after_return=1:atexit=1" 
+  endmenu   
+
+  menu "Memory Sanitizer"  
+    depends on MSAN
+
+    config MSAN_OPTS
+      string "Default MSAN options"
+      default ""
+  endmenu
+
+  menu "Thread Sanitizer"  
+    depends on TSAN
+
+    config TSAN_OPTS
+      string "Default TSAN options"
+      default "second_deadlock_stack=1"
+  endmenu
+  
+  config LLVM_XRAY
+    bool "Enable LLVM's XRay instrumentation"
+    default n
+    select DONT_START_SEPERATE_MAIN_THREAD
+
+  menu "LLVM XRay"
+    depends on LLVM_XRAY
+
+    config LLVM_XRAY_OPTS
+      string "Default XRay options"
+      default "xray_mode=xray-basic:patch_premain=true:verbosity=1"
+  endmenu
+  
+  config UBSAN
+    bool "Enable Undefined behavior Sanitizer"
+    default n
+  
+  menu "Undefined Sanitizer"
+    depends on UBSAN
+
+    config UBSAN_OPTS
+      string "Default UBSAN options"
+      default "print_stacktrace=1:suppressions=suppressions/UBSan.supp"
+  endmenu  
+endmenu
+
+menu General
+  config VERSION_MAJOR
+    int
+    default 0
+
+  config VERSION_MINOR
+    int
+    default 1
+
+  config VERSION_PATCH
+    int
+    default 0
+
+  config VERSION_LOCAL_VERSION
+    string "Local version"
+    default ""
+    help
+      Appended to the end of version string
+  
+  config STRICTLY_POSIX
+    bool "Strict POSIX compliant"
+    default y
+    help
+      Disable any non POSIX 2008 libc or
+      platform specific API usage
+
+  choice PLATFORM
+    prompt "Select platform to target"
+    depends on !STRICTLY_POSIX
+    default PLATFORM_LINUX_5_10
+    help
+      Select platform you are targetting
+      or none to not assume any platform
+      specific features (depends on
+      platform, additional options are
+      shown)
+    
+#     config PLATFORM_LINUX_4_19
+#      bool "Linux version >= 4.19"
+#    config PLATFORM_LINUX_5_10
+#      bool "Linux version >= 5.10"
+    config PLATFORM_NONE
+      bool "None"
+  endchoice
+
+  choice TARGET_LIBC
+    prompt "Select libc to target"
+    depends on !STRICTLY_POSIX
+    default LIBC_GLIBC
+    help
+      Select libc to target and show
+      additional options or none
+      to not use non POSIX 2008 features
+      (Please note that libc REQUIRED to 
+      be POSIX 2008 compliant no matter 
+      what you selects)
+
+#    config LIBC_GLIBC
+#      bool "GLibc"
+#    config LIBC_MUSL
+#      bool "Musl"
+#    config LIBC_BIONIC
+#      bool "Bionic"
+    config LIBC_NONE
+      bool "None"
+  endchoice
+endmenu
+
+config DONT_START_SEPERATE_MAIN_THREAD
+  bool "Don't start seperate main thread"
+  default n
+
+

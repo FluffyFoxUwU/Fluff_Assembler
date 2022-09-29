@@ -1,0 +1,47 @@
+; EBNF grammar for fluff assembly
+; Definition for some stuff in regex
+; <digit> is `[0-9]`
+; <letter> is `[a-zA-Z]`
+; <any> is `.`
+; <string-double> is `\"[^\"\n]+\"`
+; <string-single> is `\'[^\'\n]+\'`
+
+; Basic tokens (easy to lex)
+<register> ::= "%r" { <digit> }+
+<immediate> ::= "#" { <digit> }+
+<ident> ::= <letter> { <letter> | 
+                       <digit> | 
+                       "_" | 
+                       "@"
+                     }+
+
+<label_name> ::= <ident>
+
+<label_decl> ::= <label_name> ":"
+<string> ::= <string-double> |
+             <string-single>
+<labe_ref> ::= "=" <label_name>
+
+<assembler_directive_name> ::= "." <ident>
+
+; Non basic tokens (harder to lex)
+<argument> ::= <register> |
+               <immediate> |
+               <label_ref> |
+               <string>
+
+<argument_list> ::= [ <argument> { , <argument> }* ]
+
+<instruction> ::= <ident> <argument_list>
+<assembler_directive> ::= <assembler_directive_name> <argument_list>
+
+<label> ::= <label_name> ":"
+<statement> ::= <instruction> |
+                <assembler_directive> |
+                <label>
+
+<main> ::= { <statement> }*
+
+
+
+

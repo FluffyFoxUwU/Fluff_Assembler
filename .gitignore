@@ -5,6 +5,7 @@ solve.lua
 libs1
 testrun_directory
 libfoxgc.so
+libfluffygc.so
 *.swp
 *.pb-c.c
 *.pb-c.h
@@ -16,7 +17,16 @@ default.profdata
 *.gcno
 heapDump*.sqlite3*
 heapDump*.sqlite3*
-
-
-
+trace.json
+*.a
+xray-log.main.*
+xray-log.*
+build
+*.profraw
+*.profdata
+*.sqlite3
+saved.vim
+.config
+.config.*
+.cache
 

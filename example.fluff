@@ -1,0 +1,35 @@
+/* Assembly */
+
+// Prototype named _start
+// The name is for reference
+.prototype _start
+  .main_chunk true
+  // r0 contain number of iterations
+  ldr $r1, #0
+  // Constant 1
+  ldr $r2, #1
+  // Factorial iteration count
+  ldr $r5, #16
+
+  loop:
+    cmp $r1, $r0
+    bge =quit_benchmark_loop
+    // Factorial result
+    ldr $r3, #1
+    // Factorial iteration counter
+    ldr $r4, #0
+    factorial_loop:
+      cmp $r4, $r5
+      bge =quit_factorial_loop
+      mul $r3, $r3, $r4
+      add $r4, $r4, $r2
+    b =factorial_loop
+    quit_factorial_loop:
+  add $r1, $r1, $r2  
+  b =loop
+  quit_benchmark_loop:
+
+  ret $r3
+.endprototype
+
+
