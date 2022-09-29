@@ -30,6 +30,8 @@
   quit_benchmark_loop:
 
   ret $r3
+
+  ldr $r0, "Hello World!"
 .endprototype
 
 

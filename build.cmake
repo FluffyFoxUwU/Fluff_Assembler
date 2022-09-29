@@ -13,6 +13,7 @@ set(BUILD_INSTALL_EXECUTABLE YES)
 set(BUILD_SOURCES
   src/dummy.c
   src/lexer.c
+  src/util.c
 )
 
 # Note that exe does not represent Windows' 

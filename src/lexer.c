@@ -11,8 +11,9 @@
 
 #include "lexer.h"
 #include "constants.h"
+#include "util.h"
 
-struct lexer* lexer_new(FILE* input) {
+struct lexer* lexer_new(FILE* input, const char* inputName) {
   struct lexer* self = malloc(sizeof(*self));
   if (!self)
     return NULL;
@@ -21,15 +22,32 @@ struct lexer* lexer_new(FILE* input) {
   self->errorMessage = NULL;
   self->canFreeErrorMessage = false;
   self->lookAhead = '\0';
-  self->currentTokenBuffer = malloc(1);
-  *self->currentTokenBuffer = '\0';
   self->currentTokenBufferSize = 0;
   self->currentToken = (struct token) {};
   self->currentLine = 0;
   self->currentColumn = -1;
   self->isFirstToken = true;
+  self->currentLineBufferSize = 0;
+  self->isThrowingError = false;
+  self->inputName = inputName;
+  self->currentLineBuffer = NULL;
+  self->currentTokenBuffer = NULL;
 
+  self->currentLineBuffer = malloc(1);
+  if (!self->currentLineBuffer)
+    goto failure;
+  self->currentLineBuffer[0] = '\0';
+
+  self->currentTokenBuffer = malloc(1);
+  if (!self->currentTokenBuffer)
+    goto failure;
+  self->currentTokenBuffer[0] = '\0';
+ 
   return self;
+
+  failure:
+  lexer_free(self);
+  return NULL;
 }
 
 
@@ -37,11 +55,15 @@ void lexer_free(struct lexer* self) {
   if (self->canFreeErrorMessage)
     free((char*) self->errorMessage);
   free(self->currentTokenBuffer);
+  free(self->currentLineBuffer);
   free(self);
 }
 
 void lexer_free_token(struct token* token) {
   switch (token->type) {
+    case TOKEN_STRING:
+      free((char*) token->data.string);
+      break;
     case TOKEN_LABEL_DECL:
       free((char*) token->data.labelDeclName);
       break;
@@ -67,30 +89,42 @@ void lexer_free_token(struct token* token) {
   free((char*) token->rawToken);
 }
 
-static void throwError_vprintf(struct lexer* lexer, const char* fmt, va_list args) {
-  va_list copy;
-  va_copy(copy, args);
-  size_t len = vsnprintf(NULL, 0, fmt, copy);
-  va_end(copy);
+static int getCharRaw(struct lexer* self);
+static char* formatErrorMessage(struct lexer* self, const char* errmsg) {
+  char* result = NULL;
+  int errorColumn = self->currentColumn + 1;
+  int errorLine = self->currentLine + 1;
 
-  if (len < 0)
+  while (self->lookAhead != '\n')
+    if (getCharRaw(self) < 0)
+      break;
+
+  util_asprintf(&result, "lexing error: %s:%d:%d: %s\n"
+                         "%s\n"
+                         "%*s^", self->inputName, errorLine, errorColumn, errmsg, self->currentLineBuffer, errorColumn - 1, "");
+  return result;
+}
+
+static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args) {
+  char* buffer;
+  util_vasprintf(&buffer, fmt, args);
+  if (!buffer)
     goto format_error;
-  
-  char* buffer = malloc(len + 1);
-  if (vsnprintf(buffer, len + 1, fmt, args) < 0)
-    goto format_error;
 
-  lexer->canFreeErrorMessage = true;
-  lexer->errorMessage = buffer;
+  self->isThrowingError = true;
+  self->canFreeErrorMessage = true;
+  self->errorMessage = formatErrorMessage(self, buffer);
+  self->isThrowingError = false;
+  free(buffer);
 
-  longjmp(lexer->onError, 1);
+  longjmp(self->onError, 1);
   abort();
   
   format_error:
-  lexer->canFreeErrorMessage = false;
-  lexer->errorMessage = "Cannot format error message";
+  self->canFreeErrorMessage = false;
+  self->errorMessage = "Cannot format error message";
 
-  longjmp(lexer->onError, 1);
+  longjmp(self->onError, 1);
   abort();
 }
 
@@ -119,7 +153,18 @@ static int getCharRaw(struct lexer* self) {
   if (fread(&self->lookAhead, 1, 1, self->input) != 1) {
     if (feof(self->input) != 0)
       return -ENAVAIL;
+
+    if (self->isThrowingError)
+      return -EFAULT;
+
     throwError(self, "Cannot read input (unknown error)");
+  }
+
+  if (self->lookAhead != '\n') {
+    self->currentLineBuffer = realloc(self->currentLineBuffer, self->currentLineBufferSize + 2);
+    self->currentLineBuffer[self->currentLineBufferSize] = self->lookAhead;
+    self->currentLineBuffer[self->currentLineBufferSize + 1] = '\0';
+    self->currentLineBufferSize++;
   }
 
   self->prevColumn = self->currentColumn;
@@ -130,6 +175,14 @@ static int getCharRaw(struct lexer* self) {
   if (isNewLine) {
     self->currentLine++;
     self->currentColumn = 0;
+
+    free(self->currentLineBuffer);
+    self->currentLineBufferSize = 1;
+    self->currentLineBuffer = malloc(2);
+    if (!self->currentLineBuffer)
+      throwError(self, "Out of memory");
+    self->currentLineBuffer[0] = self->lookAhead;
+    self->currentLineBuffer[1] = '\0';
   }
 
   return 0;
@@ -238,6 +291,8 @@ static char* getIdentifier(struct lexer* self) {
  
   size_t len = 1;
   char* buffer = malloc(2);
+  if (!buffer)
+    throwError(self, "Out of memory");
   buffer[0] = self->lookAhead;
   buffer[1] = '\0';
 
@@ -275,6 +330,8 @@ static char* getComment(struct lexer* self) {
   
   size_t len = 0;
   char* buffer = malloc(1);
+  if (!buffer)
+    throwError(self, "Out of memory");
   buffer[0] = '\0';
 
   switch (self->lookAhead) {
@@ -285,10 +342,13 @@ static char* getComment(struct lexer* self) {
         matchNoSkipWhite(self, self->lookAhead);
 
         buffer = realloc(buffer, len + 2);
+        if (!buffer)
+          throwError(self, "Out of memory");
         buffer[len] = self->lookAhead;
         buffer[len + 1] = '\0';
         len++;
       }
+      matchNoSkipWhite(self, '\n');
       break;
     /* Multi line comment */
     case '*':
@@ -298,6 +358,8 @@ static char* getComment(struct lexer* self) {
         matchNoSkipWhite(self, self->lookAhead);
 
         buffer = realloc(buffer, len + 2);
+        if (!buffer)
+          throwError(self, "Out of memory");
         buffer[len] = current;
         buffer[len + 1] = '\0';
         len++;
@@ -314,6 +376,31 @@ static char* getComment(struct lexer* self) {
       throwError(self, "Expect single line or multiline comment");
   }
 
+  return buffer;
+}
+
+static char* getString(struct lexer* self) {
+  matchNoSkipWhite(self, '\"');
+  
+  size_t len = 0;
+  char* buffer = malloc(1);
+  if (!buffer)
+    throwError(self, "Out of memory");
+  buffer[0] = '\0';
+
+  while (self->lookAhead != '\"') {
+    char current = self->lookAhead;
+    matchNoSkipWhite(self, self->lookAhead);
+
+    buffer = realloc(buffer, len + 2);
+    if (!buffer)
+      throwError(self, "Out of memory");
+    buffer[len] = current;
+    buffer[len + 1] = '\0';
+    len++;
+  }
+    
+  matchNoSkipWhite(self, '\"');
   return buffer;
 }
 
@@ -363,6 +450,10 @@ static void process(struct lexer* self) {
       self->currentToken.type = TOKEN_COMMENT;
       self->currentToken.data.comment = getComment(self);
       goto exit_common;
+    case '\"':
+      self->currentToken.type = TOKEN_STRING;
+      self->currentToken.data.string = getString(self);
+      goto exit_common;
   }
 
   throwError(self, "Unknown token");
@@ -374,7 +465,6 @@ static void process(struct lexer* self) {
 int lexer_process(struct lexer* self, struct token* result) {
   int res = 0;
   if (setjmp(self->onError) != 0) {
-    printf("Lexing error: %s\n", self->errorMessage);
     free(self->currentTokenBuffer);
     res = -EFAULT;
     goto lexer_failure;

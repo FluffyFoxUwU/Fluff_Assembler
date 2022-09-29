@@ -4,7 +4,7 @@
 #include "lexer.h"
 
 int main2() {
-  struct lexer* lexer = lexer_new(stdin);
+  struct lexer* lexer = lexer_new(stdin, "<stdin>");
   struct token token = {};
   
   while (feof(lexer->input) == 0) {
@@ -22,6 +22,7 @@ int main2() {
     lexer_free_token(&token);
   };
 
+  printf("%s\n", lexer->errorMessage);
   fflush(stdout);
   lexer_free(lexer);
   _exit(0);

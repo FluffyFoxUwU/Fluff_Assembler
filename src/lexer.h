@@ -16,6 +16,7 @@ enum token_type {
   TOKEN_COMMENT,
   TOKEN_DIRECTIVE_NAME,
   TOKEN_COMMA,
+  TOKEN_STRING,
   TOKEN_UNKNOWN
 };
 
@@ -35,6 +36,7 @@ struct token {
     int64_t immediate;
 
     const char* labelName;
+    const char* string;
     const char* labelDeclName;
     const char* directiveName;
     const char* identifier;
@@ -52,8 +54,11 @@ struct lexer {
   int prevColumn;
 
   bool isFirstToken;
+  bool isThrowingError;
 
   char lookAhead;
+
+  const char* inputName;
   FILE* input;
 
   bool canFreeErrorMessage;
@@ -65,9 +70,13 @@ struct lexer {
   char* currentTokenBuffer;
 
   struct token currentToken;
+  
+  // Used for context in error message
+  size_t currentLineBufferSize;
+  char* currentLineBuffer;
 };
 
-struct lexer* lexer_new(FILE* input);
+struct lexer* lexer_new(FILE* input, const char* inputName);
 void lexer_free(struct lexer* self);
 
 // 0 on success

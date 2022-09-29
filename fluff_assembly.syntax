@@ -18,8 +18,7 @@
 <label_name> ::= <ident>
 
 <label_decl> ::= <label_name> ":"
-<string> ::= <string-double> |
-             <string-single>
+<string> ::= <string-double>
 <labe_ref> ::= "=" <label_name>
 
 <assembler_directive_name> ::= "." <ident>
