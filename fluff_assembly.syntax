@@ -23,7 +23,7 @@
 
 <assembler_directive_name> ::= "." <ident>
 
-; Non basic tokens (harder to lex)
+; Non basic tokens (need parser not lexer)
 <argument> ::= <register> |
                <immediate> |
                <label_ref> |

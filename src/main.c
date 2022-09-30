@@ -1,10 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "code_emitter.h"
 #include "lexer.h"
 
 int main2() {
-  struct lexer* lexer = lexer_new(stdin, "<stdin>");
+  /*struct lexer* lexer = lexer_new(stdin, "<stdin>");
   struct token token = {};
   
   while (feof(lexer->input) == 0) {
@@ -24,7 +25,15 @@ int main2() {
 
   printf("%s\n", lexer->errorMessage);
   fflush(stdout);
-  lexer_free(lexer);
+  lexer_free(lexer);*/
+
+  struct code_emitter* emitter = code_emitter_new();
+  
+  struct code_emitter_label* label = code_emitter_label_new(emitter, (struct token) {});
+  code_emitter_emit_jmp(emitter, 0x00, label);
+  code_emitter_emit_jmp(emitter, 0x00, label);
+  code_emitter_free(emitter);
+
   _exit(0);
   return EXIT_SUCCESS;
 }

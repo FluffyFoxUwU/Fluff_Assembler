@@ -2,3 +2,6 @@
 [submodule "buildsystem"]
 	path = buildsystem
 	url = https://github.com/FluffyFoxUwU/common-cmake
+[submodule "libs/hashmap"]
+	path = libs/hashmap
+	url = https://github.com/DavidLeeds/hashmap

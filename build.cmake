@@ -14,6 +14,9 @@ set(BUILD_SOURCES
   src/dummy.c
   src/lexer.c
   src/util.c
+  src/bytecode/bytecode.c
+  src/bytecode/prototype.c
+  src/code_emitter.c
 )
 
 # Note that exe does not represent Windows' 
