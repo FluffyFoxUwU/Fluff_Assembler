@@ -59,9 +59,10 @@ static void selfRestart(char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  char* computedPath = realpath(argv[0], NULL);
-  err = execve(computedPath, argv, environ);
-  free(computedPath); 
+  //char* computedPath = realpath(argv[0], NULL);
+  //err = execve(computedPath, argv, environ);
+  err = execvp(argv[0], argv);
+  //free(computedPath); 
 
   if (err < 0) {
     fputs("[Boot] Failed to self restart: execvp: ", stderr);
