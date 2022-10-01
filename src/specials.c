@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -5,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include "config.h"
 
@@ -50,6 +52,12 @@ static void selfRestart(char** argv) {
 
   // POSIX, why would i need to do this?
   extern char** environ;
+ 
+  size_t len = strlen(argv[0]);
+  if (len < PATH_MAX) {
+    fprintf(stderr, "[Boot] Oversized argv[0] (%zu >= %zu)\n", len, (size_t) PATH_MAX);
+    exit(EXIT_FAILURE);
+  }
 
   char* computedPath = realpath(argv[0], NULL);
   err = execve(computedPath, argv, environ);
