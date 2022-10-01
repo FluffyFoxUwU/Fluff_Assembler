@@ -48,7 +48,13 @@ static void selfRestart(char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  err = execvp(argv[0], argv);
+  // POSIX, why would i need to do this?
+  extern char** environ;
+
+  char* computedPath = realpath(argv[0], NULL);
+  err = execve(computedPath, argv, environ);
+  free(computedPath); 
+
   if (err < 0) {
     fputs("[Boot] Failed to self restart: execvp: ", stderr);
     fputs(strerror(errNum), stderr);
