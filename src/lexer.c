@@ -12,6 +12,7 @@
 #include "lexer.h"
 #include "constants.h"
 #include "util.h"
+#include "common.h"
 
 struct lexer* lexer_new(FILE* input, const char* inputName) {
   struct lexer* self = malloc(sizeof(*self));
@@ -86,23 +87,28 @@ void lexer_free_token(struct token* token) {
       break;
   }
 
+  free((char*) token->filename);
   free((char*) token->rawToken);
 }
 
 static int getCharRaw(struct lexer* self);
 static char* formatErrorMessage(struct lexer* self, const char* errmsg) {
-  char* result = NULL;
   int errorColumn = self->currentColumn + 1;
   int errorLine = self->currentLine + 1;
 
   while (self->lookAhead != '\n')
     if (getCharRaw(self) < 0)
       break;
-
-  util_asprintf(&result, "lexing error: %s:%d:%d: %s\n"
-                         "%s\n"
-                         "%*s^", self->inputName, errorLine, errorColumn, errmsg, self->currentLineBuffer, errorColumn - 1, "");
-  return result;
+  
+  return common_format_error_message(self->inputName, 
+                                     "lexing error", 
+                                     errorLine, 
+                                     errorColumn, 
+                                     "%s\n%s\n%*s^",
+                                     errmsg,
+                                     self->currentLineBuffer,
+                                     errorColumn - 1,
+                                     "");
 }
 
 static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args) {
@@ -201,18 +207,22 @@ static void getChar(struct lexer* self) {
   throwError(self, "Unknown failure: %d", res);
 } 
 
-static void skipWhite(struct lexer* self) {
-  while (self->lookAhead == ' ' ||
-         self->lookAhead == '\t' ||
-         self->lookAhead == '\n') {
+// Return white character skipped (including EOF)
+static int skipWhite(struct lexer* self) {
+  int count = 0;
+  while (isspace((unsigned char) self->lookAhead)) {
+    count++;
+    
     int res = getCharRaw(self);
     if (res >= 0)
       continue;
-  
+    
     if (res == -ENAVAIL)
-      return;
+      return count;
     throwError(self, "Unknown failure: %d", res);
   }
+  
+  return count;
 }
 
 static char matchNoSkipWhite(struct lexer* self, char c) {
@@ -469,6 +479,10 @@ int lexer_process(struct lexer* self, struct token* result) {
     res = -EFAULT;
     goto lexer_failure;
   }
+  
+  const char* filename = strdup(self->inputName);
+  if (!filename)
+    throwError(self, "Out of memory");
 
   if (self->isFirstToken) {
     getChar(self);
@@ -489,8 +503,10 @@ int lexer_process(struct lexer* self, struct token* result) {
   self->currentToken.startLine = self->startLine; 
   self->currentToken.endColumn = self->prevColumn; 
   self->currentToken.endLine = self->prevLine;
+  self->currentToken.filename = filename;
   
-  skipWhite(self);
+  if (skipWhite(self) == 0)
+    throwError(self, "Expected whitespace");
   
   if (result)
     *result = self->currentToken;

@@ -16,7 +16,7 @@ struct instruction {
 
   union {
     vm_instruction instruction;
-    vm_instruction (^deferred)();
+    vm_instruction (^deferred)(bool* status);
   } data;
 };
 
@@ -31,6 +31,8 @@ struct code_emitter_label {
 };
 
 struct code_emitter {
+  bool finalized;
+  
   size_t labelCount;
   struct code_emitter_label* labels;
 
@@ -39,10 +41,22 @@ struct code_emitter {
   vm_instruction* instructions;
   
   vm_instruction_pointer ip;
+  
+  bool shuttingDown;
+  bool canFreeErrorMessage;
+  const char* errorMessage;
 };
 
 struct code_emitter* code_emitter_new();
 void code_emitter_free(struct code_emitter* self);
+
+// Finalize and generate code
+// 0 on success
+// Errors:
+// -ENOMEM: Not enough memory to generate
+// -EFAULT: Finalization failure (check self->errorMessage)
+// -EINVAL: Finalize a finalized code emitter
+int code_emitter_finalize(struct code_emitter* self);
 
 struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, struct token token);
 
@@ -53,8 +67,58 @@ struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, str
  */
 int code_emitter_label_define(struct code_emitter* self, struct code_emitter_label* label);
 
-// Emitters
-int code_emitter_emit_jmp(struct code_emitter* self, int cond, struct code_emitter_label* target);
+/* Emitters for each instruction
+ * 0 on success
+ * Errors:
+ * -ENOMEM: Not enough memory
+ */ 
+int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_emitter_label* target);
+
+#define CODE_EMITTER_U16x3_INSTRUCTIONS \
+  X(add, FLUFFYVM_OPCODE_ADD) \
+  X(sub, FLUFFYVM_OPCODE_SUB) \
+  X(mul, FLUFFYVM_OPCODE_MUL) \
+  X(div, FLUFFYVM_OPCODE_DIV) \
+  X(mod, FLUFFYVM_OPCODE_MOD) \
+  X(pow, FLUFFYVM_OPCODE_POW)
+
+#define CODE_EMITTER_U16x2_INSTRUCTIONS \
+  X(mov, FLUFFYVM_OPCODE_MOV) \
+  X(cmp, FLUFFYVM_OPCODE_CMP) \
+
+#define CODE_EMITTER_U16_S32_INSTRUCTIONS \
+  X(ldint, FLUFFYVM_OPCODE_LOAD_INTEGER) \
+  
+#define CODE_EMITTER_U16_U32_INSTRUCTIONS \
+  X(ldconst, FLUFFYVM_OPCODE_LOAD_CONSTANT) \
+
+#define CODE_EMITTER_NO_ARG_INSTRUCTIONS \
+  X(nop, FLUFFYVM_OPCODE_NOP) \
+
+#define X(name, op) \
+  int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b);
+CODE_EMITTER_U16x2_INSTRUCTIONS
+#undef X
+
+#define X(name, op) \
+  int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint32_t b);
+CODE_EMITTER_U16_U32_INSTRUCTIONS
+#undef X
+
+#define X(name, op) \
+  int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, int32_t b);
+CODE_EMITTER_U16_S32_INSTRUCTIONS
+#undef X
+
+#define X(name, op) \
+  int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b, uint16_t c);
+CODE_EMITTER_U16x3_INSTRUCTIONS
+#undef X
+
+#define X(name, op) \
+  int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond);
+CODE_EMITTER_NO_ARG_INSTRUCTIONS
+#undef X
 
 #endif
 

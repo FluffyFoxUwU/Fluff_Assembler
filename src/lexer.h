@@ -21,6 +21,7 @@ enum token_type {
 };
 
 struct token {
+  const char* filename;
   int startColumn;
   int startLine;
   int endColumn;
@@ -43,6 +44,7 @@ struct token {
     const char* comment;
   } data;
 };
+
 void lexer_free_token(struct token* token);
 
 struct lexer {

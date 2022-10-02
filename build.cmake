@@ -17,6 +17,7 @@ set(BUILD_SOURCES
   src/bytecode/bytecode.c
   src/bytecode/prototype.c
   src/code_emitter.c
+  src/common.c
 )
 
 # Note that exe does not represent Windows' 
