@@ -9,7 +9,8 @@ struct bytecode;
 
 struct prototype {
   struct bytecode* owner;
-
+  struct prototype** subPrototypes;
+  
   size_t codeLen;
   vm_instruction* code;  
 };

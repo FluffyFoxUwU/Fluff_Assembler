@@ -1,6 +1,7 @@
 #ifndef header_1664370723_b4e2d9a3_18aa_480b_8b90_6f19fc9e5a98_lexer_h
 #define header_1664370723_b4e2d9a3_18aa_480b_8b90_6f19fc9e5a98_lexer_h
 
+#include "buffer.h"
 #include <stddef.h>
 #include <setjmp.h>
 #include <stdint.h>
@@ -30,7 +31,7 @@ struct token {
   enum token_type type;
   
   size_t rawTokenSize;
-  const char* rawToken;
+  buffer_t* rawToken;
 
   union {
     int64_t reg;
@@ -68,14 +69,12 @@ struct lexer {
 
   jmp_buf onError;
 
-  size_t currentTokenBufferSize;
-  char* currentTokenBuffer;
+  buffer_t* currentTokenBuffer;
 
   struct token currentToken;
   
   // Used for context in error message
-  size_t currentLineBufferSize;
-  char* currentLineBuffer;
+  buffer_t* currentLineBuffer;
 };
 
 struct lexer* lexer_new(FILE* input, const char* inputName);

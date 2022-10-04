@@ -18,6 +18,14 @@ set(BUILD_SOURCES
   src/bytecode/prototype.c
   src/code_emitter.c
   src/common.c
+  src/parser.c
+  deps/buffer/buffer.c
+  deps/vec/vec.c
+)
+
+set(BUILD_INCLUDE_DIRS 
+  ./deps/buffer
+  ./deps/vec
 )
 
 # Note that exe does not represent Windows' 
@@ -40,6 +48,10 @@ set(BUILD_PUBLIC_HEADERS
   include/dummy.h
 )
 
+set(BUILD_PROTOBUF_FILES
+  src/format/bytecode.proto
+)
+
 set(BUILD_CFLAGS "")
 set(BUILD_LDFLAGS "")
 
@@ -47,6 +59,8 @@ set(BUILD_LDFLAGS "")
 macro(AddDependencies)
   # Example
   # AddPkgConfigLib(FluffyGC FluffyGC>=1.0.0)
+  
+  link_libraries(-lm -lprotobuf-c)
 endmacro()
 
 

@@ -9,6 +9,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "buffer.h"
 #include "lexer.h"
 #include "constants.h"
 #include "util.h"
@@ -23,30 +24,26 @@ struct lexer* lexer_new(FILE* input, const char* inputName) {
   self->errorMessage = NULL;
   self->canFreeErrorMessage = false;
   self->lookAhead = '\0';
-  self->currentTokenBufferSize = 0;
   self->currentToken = (struct token) {};
   self->currentLine = 0;
   self->currentColumn = -1;
   self->isFirstToken = true;
-  self->currentLineBufferSize = 0;
   self->isThrowingError = false;
   self->inputName = inputName;
   self->currentLineBuffer = NULL;
   self->currentTokenBuffer = NULL;
 
-  self->currentLineBuffer = malloc(1);
+  self->currentLineBuffer = buffer_new();
   if (!self->currentLineBuffer)
     goto failure;
-  self->currentLineBuffer[0] = '\0';
-
-  self->currentTokenBuffer = malloc(1);
+  
+  self->currentTokenBuffer = buffer_new();
   if (!self->currentTokenBuffer)
     goto failure;
-  self->currentTokenBuffer[0] = '\0';
- 
+  
   return self;
 
-  failure:
+failure:
   lexer_free(self);
   return NULL;
 }
@@ -142,13 +139,8 @@ static void throwError(struct lexer* lexer, const char* fmt, ...) {
 }
 
 static void append(struct lexer* self, char c) {
-  self->currentTokenBuffer = realloc(self->currentTokenBuffer, self->currentTokenBufferSize + 2);
-  if (!self->currentTokenBuffer)
-    throwError(self, "Cannot resize token buffer");
-
-  self->currentTokenBuffer[self->currentTokenBufferSize] = c;
-  self->currentTokenBuffer[self->currentTokenBufferSize + 1] = '\0';
-  self->currentTokenBufferSize++;
+  if (buffer_append_n(self->currentTokenBuffer, &c, 1) < 0)
+    throwError(self, "Error appending token buffer");
 }
 
 // Return zero on success
@@ -166,13 +158,10 @@ static int getCharRaw(struct lexer* self) {
     throwError(self, "Cannot read input (unknown error)");
   }
 
-  if (self->lookAhead != '\n') {
-    self->currentLineBuffer = realloc(self->currentLineBuffer, self->currentLineBufferSize + 2);
-    self->currentLineBuffer[self->currentLineBufferSize] = self->lookAhead;
-    self->currentLineBuffer[self->currentLineBufferSize + 1] = '\0';
-    self->currentLineBufferSize++;
-  }
-
+  if (self->lookAhead != '\n') 
+    if (buffer_append_n(self->currentLineBuffer, &self->lookAhead, 1) < 0) 
+      throwError(self, "Error appending line buffer");
+ 
   self->prevColumn = self->currentColumn;
   self->prevLine = self->currentLine;
 
@@ -182,13 +171,11 @@ static int getCharRaw(struct lexer* self) {
     self->currentLine++;
     self->currentColumn = 0;
 
-    free(self->currentLineBuffer);
-    self->currentLineBufferSize = 1;
-    self->currentLineBuffer = malloc(2);
-    if (!self->currentLineBuffer)
-      throwError(self, "Out of memory");
-    self->currentLineBuffer[0] = self->lookAhead;
-    self->currentLineBuffer[1] = '\0';
+    buffer_clear(self->currentLineBuffer);
+    if (buffer_append_n(self->currentLineBuffer, &self->lookAhead, 0) < 0)
+      throwError(self, "Error appending line buffer");
+    if (buffer_compact(self->currentLineBuffer) < 0)
+      throwError(self, "Error clearing line buffer");
   }
 
   return 0;
@@ -268,7 +255,7 @@ static int64_t getInteger(struct lexer* self) {
 }
 
 static bool isIdentifierFirstLetter(char chr) {
-  if (isalnum((unsigned char) chr))
+  if (isalpha((unsigned char) chr))
     return true;
 
   switch (chr) {
@@ -282,7 +269,7 @@ static bool isIdentifierFirstLetter(char chr) {
 }
 
 static bool isIdentifier(char chr) {
-  if (isalpha((unsigned char) chr))
+  if (isalnum((unsigned char) chr))
     return true;
 
   switch (chr) {
@@ -468,22 +455,19 @@ static void process(struct lexer* self) {
 
   throwError(self, "Unknown token");
   
-  exit_common:
+exit_common:
   return;
 }
 
 int lexer_process(struct lexer* self, struct token* result) {
   int res = 0;
   if (setjmp(self->onError) != 0) {
-    free(self->currentTokenBuffer);
     res = -EFAULT;
     goto lexer_failure;
   }
   
-  const char* filename = strdup(self->inputName);
-  if (!filename)
-    throwError(self, "Out of memory");
-
+  const char* filename = self->inputName;
+  
   if (self->isFirstToken) {
     getChar(self);
     skipWhite(self);
@@ -498,7 +482,7 @@ int lexer_process(struct lexer* self, struct token* result) {
   
   process(self);
   self->currentToken.rawToken = self->currentTokenBuffer;
-  self->currentToken.rawTokenSize = self->currentTokenBufferSize;
+  self->currentToken.rawTokenSize = self->currentTokenBuffer->len;
   self->currentToken.startColumn = self->startColumn; 
   self->currentToken.startLine = self->startLine; 
   self->currentToken.endColumn = self->prevColumn; 
@@ -511,8 +495,9 @@ int lexer_process(struct lexer* self, struct token* result) {
   if (result)
     *result = self->currentToken;
 
-  lexer_failure:
-  self->currentTokenBufferSize = 0;
+lexer_failure:
+  if (self->currentTokenBuffer)
+    buffer_free(self->currentTokenBuffer);
   self->currentTokenBuffer = NULL;
   return res; 
 }

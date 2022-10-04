@@ -6,6 +6,8 @@
 
 #include "vm_types.h"
 
+#define BYTECODE_MAGIC ((uint64_t) 0x466F5855575500LL)
+
 struct vm;
 
 enum constant_type {
