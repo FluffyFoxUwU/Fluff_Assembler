@@ -5,38 +5,44 @@
 
 #include "prototype.h"
 #include "constants.h"
+#include "vec.h"
 #include "vm_types.h"
 
-struct prototype* prototype_new() {
+struct prototype* prototype_new(const char* sourceFile, const char* prototypeName, int line, int column) {
   struct prototype* self = malloc(sizeof(*self));
   if (!self)
     return NULL;
-
-  self->owner = NULL;
-  self->code = NULL;
-  self->codeLen = 0;
-  return self;
-}
-
-int prototype_set_code(struct prototype* self, size_t codeLen, vm_instruction* code) {
-  vm_instruction* copied = calloc(codeLen, sizeof(*copied));
-  if (!copied)
-    return -ENOMEM;
-  memcpy(copied, code, sizeof(*copied) * codeLen);
   
-  // Free old code
-  free(self->code);
-
-  self->codeLen = codeLen;
-  self->code = copied;
-  return 0;
+  vec_init(&self->prototypes);
+  vec_init(&self->instructions);
+  
+  self->sourceFile = NULL;
+  self->prototypeName = NULL;
+  self->definedAtLine = line;
+  self->definedAtColumn = column;
+  
+  self->sourceFile = strdup(sourceFile);
+  if (!self->sourceFile)
+    goto out_of_mem;
+  
+  self->prototypeName = strdup(prototypeName);
+  if (!self->prototypeName)
+    goto out_of_mem;
+  return self;
+  
+out_of_mem:
+  prototype_free(self);
+  return NULL;
 }
 
 void prototype_free(struct prototype* self) {
   if (!self)
     return;
-
-  free(self->code);
+  
+  vec_deinit(&self->prototypes);
+  vec_deinit(&self->instructions);
+  free((char*) self->prototypeName);
+  free((char*) self->sourceFile);
   free(self);
 }
 

@@ -18,7 +18,7 @@ set(BUILD_SOURCES
   src/bytecode/prototype.c
   src/code_emitter.c
   src/common.c
-  src/parser.c
+  src/parser_stage1.c
   deps/buffer/buffer.c
   deps/vec/vec.c
 )

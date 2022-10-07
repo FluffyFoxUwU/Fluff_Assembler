@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#include "vec.h"
 #include "vm_types.h"
 #include "lexer.h"
 
@@ -33,12 +34,9 @@ struct code_emitter_label {
 struct code_emitter {
   bool finalized;
   
-  size_t labelCount;
-  struct code_emitter_label* labels;
-
-  vm_instruction_pointer instructionCount;
-  struct instruction* partialInstructions;
-  vm_instruction* instructions;
+  vec_t(struct code_emitter_label*) labels;
+  vec_t(struct instruction) partialInstructions;
+  vec_t(vm_instruction) instructions;
   
   vm_instruction_pointer ip;
   
@@ -55,7 +53,7 @@ void code_emitter_free(struct code_emitter* self);
 // Errors:
 // -ENOMEM: Not enough memory to generate
 // -EFAULT: Finalization failure (check self->errorMessage)
-// -EINVAL: Finalize a finalized code emitter
+// -EINVAL: Finalize a fully or partially finalized code emitter
 int code_emitter_finalize(struct code_emitter* self);
 
 struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, struct token token);

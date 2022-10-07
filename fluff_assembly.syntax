@@ -37,9 +37,9 @@
 <label> ::= <label_name> ":"
 <statement> ::= <instruction> |
                 <assembler_directive> |
-                <label>
+                <label_decl>
 
-<main> ::= { <statement> }*
+<main> ::= { <statement> ";" }*
 
 
 

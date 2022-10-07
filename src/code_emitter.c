@@ -8,56 +8,53 @@
 #include "common.h"
 #include "vm_types.h"
 #include "opcodes.h"
+#include "vec.h"
 
 struct code_emitter* code_emitter_new() {
   struct code_emitter* self = malloc(sizeof(*self));
   
-  self->instructionCount = 0;
-  self->instructions = NULL;
-  self->partialInstructions = NULL;
-  self->labelCount = 0;
-  self->labels = NULL;
   self->ip = 0;
   self->finalized = false;
   self->errorMessage = NULL;
   self->canFreeErrorMessage = false;
   self->shuttingDown = false;
-
+  
+  vec_init(&self->labels);
+  vec_init(&self->instructions);
+  vec_init(&self->partialInstructions);
   return self;
 }
 
 void code_emitter_free(struct code_emitter* self) {
   self->shuttingDown = true;
-  
-  bool status = true;
-  for (vm_instruction_pointer i = 0; i < self->instructionCount; i++) {
-    if (self->partialInstructions[i].type == INSTRUCTION_DEFERRED && 
-        self->partialInstructions[i].data.deferred) {
-      self->partialInstructions[i].data.deferred(&status);
-      Block_release(self->partialInstructions[i].data.deferred);
-    }
-  }
+  code_emitter_finalize(self);
   
   if (self->canFreeErrorMessage)
     free((char*) self->errorMessage);
 
-  free(self->partialInstructions);
-  free(self->instructions);
+  struct code_emitter_label* label = 0;
+  int i = 0;
+  vec_foreach(&self->labels, label, i)
+    free(label);
+  
+  vec_deinit(&self->labels);
+  vec_deinit(&self->partialInstructions);
+  vec_deinit(&self->instructions);
   free(self);
 }
 
 struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, struct token token) {
-  self->labels = realloc(self->labels, sizeof(*self->labels) * (self->labelCount + 1));
-  if (!self->labels)
+  struct code_emitter_label* label = malloc(sizeof(*self));
+  if (!label)
     return NULL;
-
-  self->labelCount++;
-
-  struct code_emitter_label* label = &self->labels[self->labelCount - 1];
+  
   label->defined = false;
   label->definedAt = token;
   label->location = 0;
   label->owner = self;
+  
+  if (vec_push(&self->labels, label) < 0)
+    return NULL;
   return label;
 }
 
@@ -70,46 +67,52 @@ int code_emitter_label_define(struct code_emitter* self, struct code_emitter_lab
   return 0;
 }
 
-static int emit(struct code_emitter* self, struct instruction ins) {
-  self->partialInstructions = realloc(self->partialInstructions, sizeof(*self->partialInstructions) * (self->instructionCount + 1));
-  if (!self->partialInstructions)
-    return -ENOMEM;
-
-  self->instructionCount++;
-  self->partialInstructions[self->instructionCount - 1] = ins;
-  return 0;
+static inline int emit(struct code_emitter* self, struct instruction ins) {
+  return vec_push(&self->partialInstructions, ins) < 0 ? -EFAULT : 0;
 }
 
 int code_emitter_finalize(struct code_emitter* self) {
-  if (self->finalized)
+  if (!self->shuttingDown && self->finalized)
     return -EINVAL;
   self->finalized = true;
-
-  vm_instruction* instructions = calloc(self->instructionCount, sizeof(*self->instructions));
-  if (!instructions)
-    return -ENOMEM;
   
-  for (vm_instruction_pointer i = 0; i < self->instructionCount; i++) {
-    struct instruction* ins = &self->partialInstructions[i];
-    bool res = true;
+  if (!self->shuttingDown && vec_reserve(&self->instructions, self->partialInstructions.length) < 0)
+    return -ENOMEM;
+   
+  bool status = true;
+  struct instruction* ins;
+  int res = 0;
+  int i = 0;
+  vec_foreach_ptr(&self->partialInstructions, ins, i) {
+    vm_instruction instructionFinalized;
+    
     switch (ins->type) {
       case INSTRUCTION_NORMAL:
-        instructions[i] = ins->data.instruction;
+        instructionFinalized = ins->data.instruction;
         break;
       case INSTRUCTION_DEFERRED:
-        instructions[i] = ins->data.deferred(&res);
+        if (!ins->data.deferred)
+          continue;
+        
+        instructionFinalized = ins->data.deferred(&status);
         Block_release(ins->data.deferred);
         ins->data.deferred = NULL;
-        if (!res) {
-          free(instructions);
-          return -EFAULT;
+        if (!status) {
+          res = -EFAULT;
+          goto fail_deferred;
         }
         break; 
     }
+    
+    if (!self->shuttingDown && vec_insert(&self->instructions, i, instructionFinalized) < 0) { 
+      res = -ENOMEM;
+      goto fail_insert;
+    }
   }
   
-  self->instructions = instructions;
-  return 0;
+  fail_deferred:
+  fail_insert:
+  return res;
 }
 
 static void setErrorMessage(struct code_emitter* self, const char* filename, int line, int column, const char* fmt, ...) {

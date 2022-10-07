@@ -1,3 +1,4 @@
+#include <Block.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -8,6 +9,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 
 #include "buffer.h"
 #include "lexer.h"
@@ -24,7 +26,7 @@ struct lexer* lexer_new(FILE* input, const char* inputName) {
   self->errorMessage = NULL;
   self->canFreeErrorMessage = false;
   self->lookAhead = '\0';
-  self->currentToken = (struct token) {};
+  self->currentToken = NULL;
   self->currentLine = 0;
   self->currentColumn = -1;
   self->isFirstToken = true;
@@ -32,15 +34,16 @@ struct lexer* lexer_new(FILE* input, const char* inputName) {
   self->inputName = inputName;
   self->currentLineBuffer = NULL;
   self->currentTokenBuffer = NULL;
+  self->isEOF = false;
 
   self->currentLineBuffer = buffer_new();
   if (!self->currentLineBuffer)
     goto failure;
+  self->currentTokenBuffer = NULL;
   
-  self->currentTokenBuffer = buffer_new();
-  if (!self->currentTokenBuffer)
-    goto failure;
-  
+  vec_init(&self->cleanups);
+  vec_init(&self->allLines);
+  vec_init(&self->allTokens);
   return self;
 
 failure:
@@ -48,35 +51,65 @@ failure:
   return NULL;
 }
 
-
 void lexer_free(struct lexer* self) {
   if (self->canFreeErrorMessage)
     free((char*) self->errorMessage);
-  free(self->currentTokenBuffer);
-  free(self->currentLineBuffer);
+  
+  int i = 0;
+  buffer_t* line = NULL;
+  vec_foreach(&self->allLines, line, i) {
+    buffer_free(line);
+  }
+  
+  i = 0;
+  struct token* token = NULL;
+  vec_foreach(&self->allTokens, token, i) {
+    lexer_free_token(token);
+  }
+  
+  if (self->cleanups.length > 0) {
+    fprintf(stderr, __FILE__ ":%d: Unreleased cleanup detected!!! (this is a bug please report)\n", __LINE__);
+    abort();
+  }
+  
+  vec_deinit(&self->allLines);
+  vec_deinit(&self->allTokens);
+  vec_deinit(&self->cleanups);
+  
+  if (self->currentTokenBuffer)
+    buffer_free(self->currentTokenBuffer);
+  if (self->currentLineBuffer)
+    buffer_free(self->currentLineBuffer);
   free(self);
 }
 
 void lexer_free_token(struct token* token) {
   switch (token->type) {
     case TOKEN_STRING:
-      free((char*) token->data.string);
+      if (token->data.string)
+        buffer_free(token->data.string);
       break;
     case TOKEN_LABEL_DECL:
-      free((char*) token->data.labelDeclName);
+      if (token->data.labelDeclName)
+        buffer_free(token->data.labelDeclName);
       break;
     case TOKEN_LABEL_REF:
-      free((char*) token->data.labelName);
+      if (token->data.labelName)
+        buffer_free(token->data.labelName);
       break;
     case TOKEN_DIRECTIVE_NAME:
-      free((char*) token->data.directiveName);
+      if (token->data.directiveName)
+        buffer_free(token->data.directiveName);
       break;
     case TOKEN_IDENTIFIER:
-      free((char*) token->data.identifier);
+      if (token->data.identifier)
+        buffer_free(token->data.identifier);
       break;
     case TOKEN_COMMENT:
-      free((char*) token->data.comment);
+      if (token->data.comment)
+        buffer_free(token->data.comment);
       break;
+    case TOKEN_STATEMENT_END:
     case TOKEN_REGISTER:
     case TOKEN_COMMA:
     case TOKEN_IMMEDIATE:
@@ -84,31 +117,71 @@ void lexer_free_token(struct token* token) {
       break;
   }
 
-  free((char*) token->filename);
-  free((char*) token->rawToken);
+  if (token->rawToken)
+    buffer_free(token->rawToken);
+  free(token);
+}
+
+// Return 0 on success
+// Errors:
+// -ENOMEM: Not enough memory
+static int pushErrorCleanup(struct lexer* self, lexer_onerror_cleanup_block cleanupBlock) {
+  lexer_onerror_cleanup_block copy = Block_copy(cleanupBlock);
+  if (!copy)
+    return -ENOMEM;
+  
+  if (vec_push(&self->cleanups, copy) < 0) {
+    Block_release(copy);
+    return -ENOMEM;
+  }
+  return 0;
+}
+
+static void popErrorCleanup(struct lexer* self) {
+  if (self->cleanups.length == 0) {
+    fprintf(stderr, __FILE__ ":%d: Cleanup stack underflow!!! (this is a bug please report)\n", __LINE__);
+    abort();
+  }
+  
+  Block_release(vec_pop(&self->cleanups));
+}
+
+static void recordTokenInfo(struct lexer* self) {
+  self->currentToken->rawToken = self->currentTokenBuffer;
+  self->currentToken->fullLine = self->currentLineBuffer;
+  self->currentToken->filename = self->inputName;
+  
+  self->currentToken->startColumn = self->startColumn; 
+  self->currentToken->startLine = self->startLine; 
+  
+  self->currentToken->endColumn = self->prevColumn; 
+  self->currentToken->endLine = self->prevLine;
 }
 
 static int getCharRaw(struct lexer* self);
 static char* formatErrorMessage(struct lexer* self, const char* errmsg) {
-  int errorColumn = self->currentColumn + 1;
-  int errorLine = self->currentLine + 1;
-
+  int errorLine = self->currentLine;
+  int errorColumn = self->currentColumn >= 0 ? self->currentColumn : 0;
   while (self->lookAhead != '\n')
     if (getCharRaw(self) < 0)
       break;
   
-  return common_format_error_message(self->inputName, 
+  recordTokenInfo(self);
+  return common_format_error_message_about_token(self->inputName, 
                                      "lexing error", 
-                                     errorLine, 
-                                     errorColumn, 
-                                     "%s\n%s\n%*s^",
-                                     errmsg,
-                                     self->currentLineBuffer,
-                                     errorColumn - 1,
-                                     "");
+                                     errorLine,
+                                     errorColumn,
+                                     self->currentToken,
+                                     "%s",
+                                     errmsg);
 }
 
 static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args) {
+  if (self->isThrowingError) {
+    fputs(__FILE__ ": FATAL: Nested error!!! (this a bug please report)\n", stderr);
+    abort();
+  }
+  
   char* buffer;
   util_vasprintf(&buffer, fmt, args);
   if (!buffer)
@@ -118,7 +191,18 @@ static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args
   self->canFreeErrorMessage = true;
   self->errorMessage = formatErrorMessage(self, buffer);
   self->isThrowingError = false;
+  
+  if (self->errorMessage == NULL)
+    goto format_error;
   free(buffer);
+
+  lexer_onerror_cleanup_block current = NULL;
+  int i = 0;
+  vec_foreach_rev(&self->cleanups, current, i) {
+    current();
+    Block_release(current);
+  }
+  vec_clear(&self->cleanups);
 
   longjmp(self->onError, 1);
   abort();
@@ -131,6 +215,7 @@ static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args
   abort();
 }
 
+ATTRIBUTE_PRINTF(2, 3)
 static void throwError(struct lexer* lexer, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
@@ -146,22 +231,30 @@ static void append(struct lexer* self, char c) {
 // Return zero on success
 // Errors:
 // -ENAVAIL: No data left
+// -EFAULT: Read error (check errno for reason)
 static int getCharRaw(struct lexer* self) {
+  if (self->isEOF)
+    return -ENAVAIL;
+  
   bool isNewLine = self->lookAhead == '\n';
   if (fread(&self->lookAhead, 1, 1, self->input) != 1) {
-    if (feof(self->input) != 0)
+    if (feof(self->input) != 0) {
+      self->isEOF = true;
       return -ENAVAIL;
-
-    if (self->isThrowingError)
+    }
+    
+    if (ferror(self->input) != 0)
       return -EFAULT;
-
-    throwError(self, "Cannot read input (unknown error)");
+    
+    fputs(__FILE__ ": FATAL: Cannot read input (unknown error) (this a bug please report)\n", stderr);
+    abort();
   }
 
   if (self->lookAhead != '\n') 
     if (buffer_append_n(self->currentLineBuffer, &self->lookAhead, 1) < 0) 
-      throwError(self, "Error appending line buffer");
- 
+      return -ENOMEM;
+      // throwError(self, "Error appending line buffer");
+  
   self->prevColumn = self->currentColumn;
   self->prevLine = self->currentLine;
 
@@ -171,13 +264,41 @@ static int getCharRaw(struct lexer* self) {
     self->currentLine++;
     self->currentColumn = 0;
 
-    buffer_clear(self->currentLineBuffer);
-    if (buffer_append_n(self->currentLineBuffer, &self->lookAhead, 0) < 0)
-      throwError(self, "Error appending line buffer");
-    if (buffer_compact(self->currentLineBuffer) < 0)
-      throwError(self, "Error clearing line buffer");
+    if (vec_push(&self->allLines, self->currentLineBuffer) < 0)
+      return -ENOMEM;
+      // throwError(self, "Error adding current line buffer to self->allLines");
+
+    self->currentLineBuffer = buffer_new();
+    if (self->currentLineBuffer == NULL)
+      return -ENOMEM;
+      // throwError(self, "Error creating new line buffer");
+     
+    if (buffer_append_n(self->currentLineBuffer, &self->lookAhead, 1) < 0)
+      return -ENOMEM;
+      // throwError(self, "Error appending line buffer");
   }
 
+  return 0;
+}
+
+static int getCharAllowEOF(struct lexer* self) {
+  if (!self->isFirstToken && feof(self->input) == 0)
+    append(self, self->lookAhead);
+
+  int res = getCharRaw(self);
+  if (res >= 0 || res == -ENAVAIL)
+    return res;
+
+  switch (res) {
+    case -ENAVAIL:
+      throwError(self, "No data left to read");
+    case -EFAULT:
+      throwError(self, "Read error: %d", errno);
+    case -ENOMEM:
+      throwError(self, "Not enough memory");
+  }
+  
+  throwError(self, "Unknown failure: %d", res);
   return 0;
 }
 
@@ -185,12 +306,17 @@ static void getChar(struct lexer* self) {
   if (!self->isFirstToken && feof(self->input) == 0)
     append(self, self->lookAhead);
 
-  int res = getCharRaw(self);
+  int res = getCharAllowEOF(self);
   if (res >= 0)
     return;
 
-  if (res == -ENAVAIL)
-    throwError(self, "No data left to read");
+  switch (res) {
+    case -ENAVAIL:
+      throwError(self, "No data left to read");
+    case -EFAULT:
+      throwError(self, "Read error");
+  }
+  
   throwError(self, "Unknown failure: %d", res);
 } 
 
@@ -282,37 +408,40 @@ static bool isIdentifier(char chr) {
   return false;
 }
 
-static char* getIdentifier(struct lexer* self) {
+static buffer_t* getIdentifier(struct lexer* self) {
   if (!isIdentifierFirstLetter(self->lookAhead))
     throwError(self, "Expected 'identifier'");
  
-  size_t len = 1;
-  char* buffer = malloc(2);
+  buffer_t* buffer = buffer_new();
   if (!buffer)
     throwError(self, "Out of memory");
-  buffer[0] = self->lookAhead;
-  buffer[1] = '\0';
-
+  if (pushErrorCleanup(self, ^() {
+        buffer_free(buffer);
+      }) < 0)
+    goto error_push_cleanup;
+  
   while (isIdentifier(self->lookAhead)) {
-    buffer = realloc(buffer, len + 2);
-    if (!buffer)
-      throwError(self, "Out of memory");
-    buffer[len] = self->lookAhead;
-    buffer[len + 1] = '\0';
-    len++;
-
+    if (buffer_append_n(buffer, &self->lookAhead, 1) < 0)
+      throwError(self, "Error appending");
+    
     getChar(self);
   }
 
+  popErrorCleanup(self);
   return buffer;
+  
+error_push_cleanup:
+  buffer_free(buffer);
+  throwError(self, "Error pushing cleanup block");
+  return NULL;
 }
 
-static char* getLabelRef(struct lexer* self) {
+static buffer_t* getLabelRef(struct lexer* self) {
   matchNoSkipWhite(self, '=');
   return getIdentifier(self);
 }
 
-static char* getDirectiveName(struct lexer* self) {
+static buffer_t* getDirectiveName(struct lexer* self) {
   matchNoSkipWhite(self, '.');
   return getIdentifier(self);
 }
@@ -322,28 +451,25 @@ static int64_t getImmediate(struct lexer* self) {
   return getInteger(self);
 }
 
-static char* getComment(struct lexer* self) {
+static buffer_t* getComment(struct lexer* self) {
   matchNoSkipWhite(self, '/');
   
-  size_t len = 0;
-  char* buffer = malloc(1);
+  buffer_t* buffer = buffer_new();
   if (!buffer)
     throwError(self, "Out of memory");
-  buffer[0] = '\0';
-
+  if (pushErrorCleanup(self, ^() {
+      buffer_free(buffer);
+    }) < 0)
+    goto error_push_cleanup;
+  
   switch (self->lookAhead) {
     // Single line comment
     case '/':
       matchNoSkipWhite(self, '/');
       while (self->lookAhead != '\n') {
         matchNoSkipWhite(self, self->lookAhead);
-
-        buffer = realloc(buffer, len + 2);
-        if (!buffer)
-          throwError(self, "Out of memory");
-        buffer[len] = self->lookAhead;
-        buffer[len + 1] = '\0';
-        len++;
+        if (buffer_append_n(buffer, &self->lookAhead, 1) < 0)
+          throwError(self, "Error appending");
       }
       matchNoSkipWhite(self, '\n');
       break;
@@ -354,17 +480,13 @@ static char* getComment(struct lexer* self) {
         char current = self->lookAhead;
         matchNoSkipWhite(self, self->lookAhead);
 
-        buffer = realloc(buffer, len + 2);
-        if (!buffer)
-          throwError(self, "Out of memory");
-        buffer[len] = current;
-        buffer[len + 1] = '\0';
-        len++;
+        if (buffer_append_n(buffer, &current, 1) < 0)
+          throwError(self, "Error appending");
         
         // End of multiline comment
-        if (current == '/' && buffer[len - 2] == '*') {
+        if (current == '/' && buffer->data[buffer_length(buffer) - 2] == '*') {
           // Replace '*' at the end with NUL
-          buffer[len - 2] = '\0';
+          buffer->data[buffer_length(buffer) - 2] = '\0';
           break;
         }
       }
@@ -373,32 +495,41 @@ static char* getComment(struct lexer* self) {
       throwError(self, "Expect single line or multiline comment");
   }
 
+  popErrorCleanup(self);
   return buffer;
+
+error_push_cleanup:
+  buffer_free(buffer);
+  throwError(self, "Error pushing cleanup block");
+  return NULL;
 }
 
-static char* getString(struct lexer* self) {
+static buffer_t* getString(struct lexer* self) {
   matchNoSkipWhite(self, '\"');
   
-  size_t len = 0;
-  char* buffer = malloc(1);
+  buffer_t* buffer = buffer_new();
   if (!buffer)
     throwError(self, "Out of memory");
-  buffer[0] = '\0';
-
+  if (pushErrorCleanup(self, ^() {
+      buffer_free(buffer);
+    }) < 0)
+    goto error_push_cleanup;
+  
   while (self->lookAhead != '\"') {
     char current = self->lookAhead;
     matchNoSkipWhite(self, self->lookAhead);
-
-    buffer = realloc(buffer, len + 2);
-    if (!buffer)
-      throwError(self, "Out of memory");
-    buffer[len] = current;
-    buffer[len + 1] = '\0';
-    len++;
+    if (buffer_append_n(buffer, &current, 1) < 0) 
+      throwError(self, "Error appending");
   }
     
+  popErrorCleanup(self);
   matchNoSkipWhite(self, '\"');
   return buffer;
+
+error_push_cleanup:
+  buffer_free(buffer);
+  throwError(self, "Error pushing cleanup block");
+  return NULL;
 }
 
 static int64_t getRegister(struct lexer* self) {
@@ -412,44 +543,44 @@ static int64_t getRegister(struct lexer* self) {
 
 static void process(struct lexer* self) {
   if (isIdentifierFirstLetter(self->lookAhead)) {
-    self->currentToken.type = TOKEN_IDENTIFIER;
-    self->currentToken.data.identifier = getIdentifier(self);
+    self->currentToken->type = TOKEN_IDENTIFIER;
+    self->currentToken->data.identifier = getIdentifier(self);
 
     if (self->lookAhead == ':') {
       matchNoSkipWhite(self, ':');
-      self->currentToken.type = TOKEN_LABEL_DECL;
+      self->currentToken->type = TOKEN_LABEL_DECL;
     }
     goto exit_common;
   }
 
   switch (self->lookAhead) {
     case '$':
-      self->currentToken.type = TOKEN_REGISTER;
-      self->currentToken.data.reg = getRegister(self);
+      self->currentToken->type = TOKEN_REGISTER;
+      self->currentToken->data.reg = getRegister(self);
       goto exit_common;
     case '=':
-      self->currentToken.type = TOKEN_LABEL_REF;
-      self->currentToken.data.labelName = getLabelRef(self);
+      self->currentToken->type = TOKEN_LABEL_REF;
+      self->currentToken->data.labelName = getLabelRef(self);
       goto exit_common;
     case '.':
-      self->currentToken.type = TOKEN_DIRECTIVE_NAME;
-      self->currentToken.data.directiveName = getDirectiveName(self);
+      self->currentToken->type = TOKEN_DIRECTIVE_NAME;
+      self->currentToken->data.directiveName = getDirectiveName(self);
       goto exit_common;
     case ',':
-      self->currentToken.type = TOKEN_COMMA;
+      self->currentToken->type = TOKEN_COMMA;
       matchNoSkipWhite(self, ',');
       goto exit_common;
     case '#':
-      self->currentToken.type = TOKEN_IMMEDIATE;
-      self->currentToken.data.immediate = getImmediate(self);
+      self->currentToken->type = TOKEN_IMMEDIATE;
+      self->currentToken->data.immediate = getImmediate(self);
       goto exit_common;
     case '/':
-      self->currentToken.type = TOKEN_COMMENT;
-      self->currentToken.data.comment = getComment(self);
+      self->currentToken->type = TOKEN_COMMENT;
+      self->currentToken->data.comment = getComment(self);
       goto exit_common;
     case '\"':
-      self->currentToken.type = TOKEN_STRING;
-      self->currentToken.data.string = getString(self);
+      self->currentToken->type = TOKEN_STRING;
+      self->currentToken->data.string = getString(self);
       goto exit_common;
   }
 
@@ -459,14 +590,22 @@ exit_common:
   return;
 }
 
-int lexer_process(struct lexer* self, struct token* result) {
+// volatile because longjmp and setjmp
+static int lexer_process_one(struct lexer* self, struct token** result) {
+  self->currentToken = malloc(sizeof(*self->currentToken));
+  if (self->currentToken == NULL)
+    return -ENOMEM;
+  *self->currentToken = (struct token) {};
+  
   int res = 0;
   if (setjmp(self->onError) != 0) {
     res = -EFAULT;
     goto lexer_failure;
   }
   
-  const char* filename = self->inputName;
+  self->currentTokenBuffer = buffer_new();
+  if (self->currentTokenBuffer == NULL)
+    throwError(self, "Error creating token buffer");
   
   if (self->isFirstToken) {
     getChar(self);
@@ -477,31 +616,47 @@ int lexer_process(struct lexer* self, struct token* result) {
   // Move start position
   self->startColumn = self->currentColumn;
   self->startLine = self->currentLine;
-
-  self->currentToken = (struct token) {};
   
   process(self);
-  self->currentToken.rawToken = self->currentTokenBuffer;
-  self->currentToken.rawTokenSize = self->currentTokenBuffer->len;
-  self->currentToken.startColumn = self->startColumn; 
-  self->currentToken.startLine = self->startLine; 
-  self->currentToken.endColumn = self->prevColumn; 
-  self->currentToken.endLine = self->prevLine;
-  self->currentToken.filename = filename;
+  recordTokenInfo(self);
   
-  if (skipWhite(self) == 0)
-    throwError(self, "Expected whitespace");
+  skipWhite(self);
   
+  // Save to token struct storage allocated earlier
   if (result)
     *result = self->currentToken;
 
-lexer_failure:
-  if (self->currentTokenBuffer)
-    buffer_free(self->currentTokenBuffer);
+  self->currentToken = NULL;
   self->currentTokenBuffer = NULL;
-  return res; 
+  return res;
+
+lexer_failure:
+  recordTokenInfo(self);
+  
+  // Also free's self->currentTokenBuffer as
+  // self->currentTokenBuffer == self->currentToken->rawToken
+  // at this context
+  lexer_free_token(self->currentToken);
+  
+  self->currentTokenBuffer = NULL;
+  self->currentToken = NULL;
+  return res;
 }
 
+int lexer_process(struct lexer* self) {
+  struct token* currentToken = NULL;
+  int res = 0;
+  while (!self->isThrowingError && !self->isEOF) {
+    res = lexer_process_one(self, &currentToken);
+    if (res < 0) 
+      break;
+  
+    if (vec_push(&self->allTokens, currentToken) < 0)
+      return -ENOMEM;
+  }
+  
+  return res;
+}
 
 
 

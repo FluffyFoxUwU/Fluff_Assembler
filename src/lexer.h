@@ -2,6 +2,7 @@
 #define header_1664370723_b4e2d9a3_18aa_480b_8b90_6f19fc9e5a98_lexer_h
 
 #include "buffer.h"
+#include "vec.h"
 #include <stddef.h>
 #include <setjmp.h>
 #include <stdint.h>
@@ -9,6 +10,7 @@
 #include <stdbool.h>
 
 enum token_type {
+  TOKEN_UNKNOWN,
   TOKEN_REGISTER,
   TOKEN_IMMEDIATE,
   TOKEN_IDENTIFIER,
@@ -18,7 +20,7 @@ enum token_type {
   TOKEN_DIRECTIVE_NAME,
   TOKEN_COMMA,
   TOKEN_STRING,
-  TOKEN_UNKNOWN
+  TOKEN_STATEMENT_END // End of statement essentially is `;`
 };
 
 struct token {
@@ -30,24 +32,25 @@ struct token {
 
   enum token_type type;
   
-  size_t rawTokenSize;
   buffer_t* rawToken;
+  buffer_t* fullLine;
 
   union {
     int64_t reg;
     int64_t immediate;
 
-    const char* labelName;
-    const char* string;
-    const char* labelDeclName;
-    const char* directiveName;
-    const char* identifier;
-    const char* comment;
+    buffer_t* labelName;
+    buffer_t* string;
+    buffer_t* labelDeclName;
+    buffer_t* directiveName;
+    buffer_t* identifier;
+    buffer_t* comment;
   } data;
 };
 
 void lexer_free_token(struct token* token);
 
+typedef void (^lexer_onerror_cleanup_block)();
 struct lexer {
   int startLine;
   int startColumn;
@@ -58,6 +61,7 @@ struct lexer {
 
   bool isFirstToken;
   bool isThrowingError;
+  bool isEOF;
 
   char lookAhead;
 
@@ -70,11 +74,13 @@ struct lexer {
   jmp_buf onError;
 
   buffer_t* currentTokenBuffer;
-
-  struct token currentToken;
+  struct token* currentToken;
   
-  // Used for context in error message
   buffer_t* currentLineBuffer;
+  
+  vec_t(buffer_t*) allLines;
+  vec_t(struct token*) allTokens;
+  vec_t(lexer_onerror_cleanup_block) cleanups;
 };
 
 struct lexer* lexer_new(FILE* input, const char* inputName);
@@ -86,9 +92,7 @@ void lexer_free(struct lexer* self);
 // -ENOMEM: Insufficient memory to process
 // -EFAULT: Lexing error
 // -EINVAL: Call on errored lexer instance
-//
-// Note on failure: `result` content is undefined
-int lexer_process(struct lexer* self, struct token* result);
+int lexer_process(struct lexer* self);
 
 #endif
 

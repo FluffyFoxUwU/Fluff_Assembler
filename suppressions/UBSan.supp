@@ -1,2 +1,4 @@
 unsigned-integer-overflow:hashmap.c
 
+# In deps/buffer/buffer.c
+implicit-integer-sign-change:buffer_resize

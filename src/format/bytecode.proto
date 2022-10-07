@@ -1,15 +1,8 @@
-syntax = "proto3";
+syntax = "proto2";
+
 package FluffyVmFormat.Bytecode;
 
-enum ConstantType {
-  NOT_SET = 0;
-  STRING = 1;
-  DOUBLE = 2;
-  LONG = 3;
-}
-
 message Constant {
-  ConstantType type = 1;
   oneof data {
     bytes data_str = 2;
     sint64 data_longNum = 3;
@@ -18,20 +11,18 @@ message Constant {
 }
 
 message Prototype {
-  repeated uint64 instructions = 1;
+  required uint64 instructions = 1;
   repeated Prototype prototypes = 2;
-
+  
   // Debug info (optional)
   repeated int32 lineInfo = 3;
-  // Just give 0 length string
-  // if not present
-  string sourceFile = 4;
+  optional string sourceFile = 4;
 }
 
 message Bytecode {
-  uint32 version = 1;
+  required uint32 version = 1;
   repeated Constant constants = 2;
-  Prototype mainPrototype = 3;
+  required Prototype mainPrototype = 3;
 }
 
 

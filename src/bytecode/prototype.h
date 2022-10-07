@@ -3,28 +3,22 @@
 
 #include <stddef.h>
 
+#include "vec.h"
 #include "vm_types.h"
 
 struct bytecode;
 
 struct prototype {
-  struct bytecode* owner;
-  struct prototype** subPrototypes;
+  const char* sourceFile;
+  const char* prototypeName;
+  int definedAtLine;
+  int definedAtColumn;
   
-  size_t codeLen;
-  vm_instruction* code;  
+  vec_t(struct prototype*) prototypes;
+  vec_t(vm_instruction) instructions;
 };
 
-struct prototype* prototype_new();
-
-/* On error the prototype remain untouched
- * Errors:
- * -EINVAL: Verification error
- * -ENOMEM: Not enough memory 
- * -E2BIG : Code size too big
- */
-int prototype_set_code(struct prototype* self, size_t codeLen, vm_instruction* code);
-
+struct prototype* prototype_new(const char* sourceFile, const char* prototypeName, int line, int column);
 void prototype_free(struct prototype* self);
 
 #endif

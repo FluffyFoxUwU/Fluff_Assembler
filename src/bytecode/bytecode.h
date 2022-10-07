@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "bytecode/prototype.h"
+#include "vec.h"
 #include "vm_types.h"
 
 #define BYTECODE_MAGIC ((uint64_t) 0x466F5855575500LL)
@@ -24,27 +26,11 @@ struct constant {
 };
 
 struct bytecode {
-  size_t constantsLen;
-  struct constant* constants;
-
-  size_t prototypesLen;
-  struct prototype** prototypes;
+  vec_t(struct constant*) constants;
+  struct prototype* mainPrototype;
 };
 
 struct bytecode* bytecode_new();
-
-/* Errors:
- * -EINVAL: Too many prototypes
- * -ENOMEM: Not enough memory
- */
-int bytecode_set_prototypes(struct bytecode* self, size_t prototypesLen, struct prototype** prototypes);
-
-/* Errors:
- * -EINVAL: Too many constants
- * -ENOMEM: Not enough memory
- */
-int bytecode_set_constants(struct bytecode* self, size_t constantsLen, struct constant* constants);
-
 void bytecode_free(struct bytecode* self);
 
 #endif
