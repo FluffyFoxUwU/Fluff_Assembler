@@ -30,3 +30,4 @@ saved.vim
 .config.*
 .cache
 *.fluff_bin
+golf.lua

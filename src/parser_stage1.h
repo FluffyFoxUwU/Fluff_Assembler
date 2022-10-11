@@ -4,12 +4,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "buffer.h"
 #include "lexer.h"
 #include "vec.h"
 
 // Stage 1 Parser_stage1 (Combine tokens into statements)
 
-enum statement_types {
+enum statement_type {
   STATEMENT_UNKNOWN,
   STATEMENT_COMMENT,
   STATEMENT_ASSEMBLER_DIRECTIVE,
@@ -18,27 +19,41 @@ enum statement_types {
 };
 
 struct statement {
-  vec_t(struct token) tokens;
+  enum statement_type type;
+  vec_t(struct token*) rawTokens;
+  vec_t(struct token*) wholeStatement;
+  
+  union {
+    buffer_t* labelName;
+    buffer_t* commentData;
+  } data;
 };
 
 struct bytecode;
 struct parser_stage1 {
-  struct lexer* currentLexer;
+  struct lexer* lexer;
   
+  bool isCompleted;
   bool canFreeErrorMsg;
-  const char* errormsg;
+  bool isFirstToken;
+  const char* errorMessage;
   
   struct token* currentToken;
+  struct statement* currentStatement;
+  
+  int tokenPointer;
+  vec_t(struct statement*) allStatements;
 };
 
-struct parser_stage1* parser_stage1_new();
+struct parser_stage1* parser_stage1_new(struct lexer* lexer);
 void parser_stage1_free(struct parser_stage1* self);
 
-// 0 on success (the result at self->result)
+// 0 on success
 // Errors:
 // -EFAULT: Error parsing (check self->errormsg)
 // -ENOMEM: Not enough memory
-int parser_stage1_process(struct parser_stage1* self, struct lexer* lexer);
+// -EINVAL: Attempt to process failed instance
+int parser_stage1_process(struct parser_stage1* self);
 
 #endif
 

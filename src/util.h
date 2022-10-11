@@ -11,5 +11,7 @@ size_t util_vasprintf(char** buffer, const char* fmt, va_list args);
 ATTRIBUTE_PRINTF(2, 3)
 size_t util_asprintf(char** buffer, const char* fmt, ...);
 
+typedef void (^runnable_block)();
+
 #endif
 

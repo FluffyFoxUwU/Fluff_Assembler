@@ -38,15 +38,15 @@ char* common_format_error_message_about_token_valist(const char* filename, const
   if (!errmsg)
     return NULL;
   
-  char* hand = "";
-  
-  if (line < 0 || column < 0) {
-    hand = malloc(buffer_length(token->rawToken) + 1);
+  char* hand = NULL;
+  size_t len = buffer_length(token->rawToken);
+  if ((line < 0 || column < 0) && len > 0) {
+    hand = malloc(len);
     if (!hand)
       return NULL;
     
-    memset(hand, '~', buffer_length(token->rawToken));
-    hand[buffer_length(token->rawToken)] = '\0';
+    memset(hand, '~', len - 1);
+    hand[len - 1] = '\0';
   }
   
   char* res = common_format_error_message(filename, 
@@ -58,10 +58,9 @@ char* common_format_error_message_about_token_valist(const char* filename, const
                               buffer_string(token->fullLine),
                               column < 0 ? token->startColumn : column,
                               "",
-                              hand);
+                              hand ? hand : "");
   
-  if (line < 0 || column < 0)
-    free(hand);
+  free(hand);
   free(errmsg);
   return res;
 }

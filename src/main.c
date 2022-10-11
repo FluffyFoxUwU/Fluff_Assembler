@@ -18,19 +18,23 @@ int main2() {
   }
   
   struct lexer* lexer = lexer_new(fp, file);
-  int lexerRes = lexer_process(lexer);
+  struct parser_stage1* parser_stage1 = parser_stage1_new(lexer);
+  
+  int res = lexer_process(lexer);
   fclose(fp);
   
-  if (lexerRes < 0)
-    printf("Lexer error: %s (errno %d)\n", lexer->errorMessage, lexerRes);
-  
-  struct parser_stage1* parser_stage1 = parser_stage1_new();
-  
-  if (parser_stage1_process(parser_stage1, lexer) < 0) {
-    perror("parser_stage1");
-    return EXIT_FAILURE;
+  if (res < 0) {
+    printf("Lexer error: %s (errno %d)\n", lexer->errorMessage, res);
+    goto failure;
   }
   
+  res = parser_stage1_process(parser_stage1);
+  if (res < 0) {
+    printf("Stage1 parser error: %s (errno %d)\n", parser_stage1->errorMessage, res);
+    goto failure;
+  }
+  
+  failure:
   parser_stage1_free(parser_stage1);
   lexer_free(lexer);
   

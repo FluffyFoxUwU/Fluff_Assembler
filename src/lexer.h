@@ -2,6 +2,7 @@
 #define header_1664370723_b4e2d9a3_18aa_480b_8b90_6f19fc9e5a98_lexer_h
 
 #include "buffer.h"
+#include "util.h"
 #include "vec.h"
 #include <stddef.h>
 #include <setjmp.h>
@@ -48,9 +49,6 @@ struct token {
   } data;
 };
 
-void lexer_free_token(struct token* token);
-
-typedef void (^lexer_onerror_cleanup_block)();
 struct lexer {
   int startLine;
   int startColumn;
@@ -62,6 +60,7 @@ struct lexer {
   bool isFirstToken;
   bool isThrowingError;
   bool isEOF;
+  bool isCompleted;
 
   char lookAhead;
 
@@ -80,7 +79,7 @@ struct lexer {
   
   vec_t(buffer_t*) allLines;
   vec_t(struct token*) allTokens;
-  vec_t(lexer_onerror_cleanup_block) cleanups;
+  vec_t(runnable_block) cleanups;
 };
 
 struct lexer* lexer_new(FILE* input, const char* inputName);
