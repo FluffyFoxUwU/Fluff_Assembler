@@ -6,8 +6,25 @@
 #include "code_emitter.h"
 #include "lexer.h"
 #include "parser_stage1.h"
+#include "parser_stage2.h"
 #include "vec.h"
 #include "vm_types.h"
+
+/*
+Pipeline for source to bytecode generation
+
+Bytecode
+   |
+ProtoBuf
+   |
+Parser Stage 2
+   |
+Parser Stage 1
+   |
+ Lexer
+   |
+Source file
+*/
 
 int main2() {
   const char* file = "../example.fluff";
@@ -19,6 +36,7 @@ int main2() {
   
   struct lexer* lexer = lexer_new(fp, file);
   struct parser_stage1* parser_stage1 = parser_stage1_new(lexer);
+  struct parser_stage2* parser_stage2 = parser_stage2_new(parser_stage1);
   
   int res = lexer_process(lexer);
   fclose(fp);
@@ -34,7 +52,14 @@ int main2() {
     goto failure;
   }
   
+  res = parser_stage2_process(parser_stage2);
+  if (res < 0) {
+    printf("Stage2 parser error: %s (errno %d)\n", parser_stage2->errorMessage, res);
+    goto failure;
+  }
+  
   failure:
+  parser_stage2_free(parser_stage2);
   parser_stage1_free(parser_stage1);
   lexer_free(lexer);
   

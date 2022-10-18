@@ -31,3 +31,4 @@ saved.vim
 .cache
 *.fluff_bin
 golf.lua
+.vscode

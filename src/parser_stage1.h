@@ -5,7 +5,6 @@
 #include <stddef.h>
 
 #include "buffer.h"
-#include "lexer.h"
 #include "vec.h"
 
 // Stage 1 Parser_stage1 (Combine tokens into statements)
@@ -29,7 +28,7 @@ struct statement {
   } data;
 };
 
-struct bytecode;
+struct lexer;
 struct parser_stage1 {
   struct lexer* lexer;
   

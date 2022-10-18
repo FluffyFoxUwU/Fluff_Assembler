@@ -163,76 +163,6 @@ static void recordTokenInfo(struct lexer* self) {
   self->currentToken->endLine = self->prevLine;
 }
 
-static int getCharRaw(struct lexer* self);
-static char* formatErrorMessage(struct lexer* self, const char* errmsg) {
-  int errorLine = self->currentLine;
-  int errorColumn = self->currentColumn >= 0 ? self->currentColumn : 0;
-  while (self->lookAhead != '\n')
-    if (getCharRaw(self) < 0)
-      break;
-  
-  recordTokenInfo(self);
-  return common_format_error_message_about_token(self->inputName, 
-                                     "lexing error", 
-                                     errorLine,
-                                     errorColumn,
-                                     self->currentToken,
-                                     "%s",
-                                     errmsg);
-}
-
-static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args) {
-  if (self->isThrowingError) {
-    fputs(__FILE__ ": FATAL: Nested error!!! (this a bug please report)\n", stderr);
-    abort();
-  }
-  
-  char* buffer;
-  util_vasprintf(&buffer, fmt, args);
-  if (!buffer)
-    goto format_error;
-
-  self->isThrowingError = true;
-  self->canFreeErrorMessage = true;
-  self->errorMessage = formatErrorMessage(self, buffer);
-  self->isThrowingError = false;
-  
-  if (self->errorMessage == NULL)
-    goto format_error;
-  free(buffer);
-
-  runnable_block current = NULL;
-  int i = 0;
-  vec_foreach_rev(&self->cleanups, current, i) {
-    current();
-    Block_release(current);
-  }
-  vec_clear(&self->cleanups);
-
-  longjmp(self->onError, 1);
-  abort();
-  
-  format_error:
-  self->canFreeErrorMessage = false;
-  self->errorMessage = "Cannot format error message";
-
-  longjmp(self->onError, 1);
-  abort();
-}
-
-ATTRIBUTE_PRINTF(2, 3)
-static void throwError(struct lexer* lexer, const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  throwError_vprintf(lexer, fmt, args);
-  va_end(args);
-}
-
-static void append(struct lexer* self, char c) {
-  if (buffer_append_n(self->currentTokenBuffer, &c, 1) < 0)
-    throwError(self, "Error appending token buffer");
-}
-
 // Return zero on success
 // Errors:
 // -ENAVAIL: No data left
@@ -280,12 +210,78 @@ static int getCharRaw(struct lexer* self) {
       return -ENOMEM;
   }
   
+  int raise(int);
+  printf("Yay: %c\n", self->lookAhead);
+  if (self->lookAhead == ';')
+    raise(5);
   return 0;
 }
 
+static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args) {
+  if (self->isThrowingError) {
+    fputs(__FILE__ ": FATAL: Nested error!!! (this a bug please report)\n", stderr);
+    abort();
+  }
+  
+  while (self->lookAhead != '\n')
+    if (getCharRaw(self) < 0)
+      break;
+  
+  recordTokenInfo(self);
+  
+  char* buffer;
+  util_vasprintf(&buffer, fmt, args);
+  if (!buffer)
+    goto format_error;
+
+  self->isThrowingError = true;
+  self->canFreeErrorMessage = true;
+  self->errorMessage = common_format_error_message_about_token(self->inputName, 
+                                                               "lexing error", 
+                                                               self->currentLine,
+                                                               self->currentColumn >= 0 ? self->currentColumn : 0,
+                                                               self->currentToken,
+                                                               "%s",
+                                                               buffer);
+  self->isThrowingError = false;
+  
+  if (self->errorMessage == NULL)
+    goto format_error;
+  free(buffer);
+
+  runnable_block current = NULL;
+  int i = 0;
+  vec_foreach_rev(&self->cleanups, current, i) {
+    current();
+    Block_release(current);
+  }
+  vec_clear(&self->cleanups);
+
+  longjmp(self->onError, 1);
+  abort();
+  
+  format_error:
+  self->canFreeErrorMessage = false;
+  self->errorMessage = "Cannot format error message";
+
+  longjmp(self->onError, 1);
+  abort();
+}
+
+ATTRIBUTE_PRINTF(2, 3)
+static void throwError(struct lexer* lexer, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  throwError_vprintf(lexer, fmt, args);
+  va_end(args);
+}
+
 static int getCharAllowEOF(struct lexer* self) {
-  if (!self->isFirstToken && feof(self->input) == 0)
-    append(self, self->lookAhead);
+  if (!self->isFirstToken && 
+      feof(self->input) == 0 && 
+      buffer_append_n(self->currentTokenBuffer, &self->lookAhead, 1) < 0) {
+    throwError(self, "Error appending token buffer");
+  }
 
   int res = getCharRaw(self);
   if (res >= 0 || res == -ENAVAIL)
@@ -386,7 +382,7 @@ static bool isIdentifierFirstLetter(char chr) {
   switch (chr) {
     case '_':
       return true;
-    case '@':
+    case '$':
       return true;
   }
 
@@ -400,7 +396,7 @@ static bool isIdentifier(char chr) {
   switch (chr) {
     case '_':
       return true;
-    case '@':
+    case '$':
       return true;
   }
 
@@ -445,6 +441,13 @@ static buffer_t* getDirectiveName(struct lexer* self) {
   return getIdentifier(self);
 }
 
+static buffer_t* getLabelDecl(struct lexer* self) {
+  matchNoSkipWhite(self, ':');
+  buffer_t* ident = getIdentifier(self);
+  matchNoSkipWhite(self, ':');
+  return ident;
+}
+
 static int64_t getImmediate(struct lexer* self) {
   matchNoSkipWhite(self, '#');
   return getInteger(self);
@@ -462,16 +465,6 @@ static buffer_t* getComment(struct lexer* self) {
     goto error_push_cleanup;
   
   switch (self->lookAhead) {
-    // Single line comment
-    case '/':
-      matchNoSkipWhite(self, '/');
-      while (self->lookAhead != '\n') {
-        matchNoSkipWhite(self, self->lookAhead);
-        if (buffer_append_n(buffer, &self->lookAhead, 1) < 0)
-          throwError(self, "Error appending");
-      }
-      matchNoSkipWhite(self, '\n');
-      break;
     /* Multi line comment */
     case '*':
       matchNoSkipWhite(self, '*');
@@ -541,17 +534,6 @@ static int64_t getRegister(struct lexer* self) {
 }
 
 static void process(struct lexer* self) {
-  if (isIdentifierFirstLetter(self->lookAhead)) {
-    self->currentToken->type = TOKEN_IDENTIFIER;
-    self->currentToken->data.identifier = getIdentifier(self);
-
-    if (self->lookAhead == ':') {
-      matchNoSkipWhite(self, ':');
-      self->currentToken->type = TOKEN_LABEL_DECL;
-    }
-    goto exit_common;
-  }
-
   switch (self->lookAhead) {
     case '$':
       self->currentToken->type = TOKEN_REGISTER;
@@ -564,6 +546,10 @@ static void process(struct lexer* self) {
     case '.':
       self->currentToken->type = TOKEN_DIRECTIVE_NAME;
       self->currentToken->data.directiveName = getDirectiveName(self);
+      goto exit_common;
+    case ':':
+      self->currentToken->type = TOKEN_LABEL_DECL;
+      self->currentToken->data.labelDeclName = getLabelDecl(self);
       goto exit_common;
     case ',':
       self->currentToken->type = TOKEN_COMMA;
@@ -582,11 +568,12 @@ static void process(struct lexer* self) {
       self->currentToken->data.string = getString(self);
       goto exit_common;
     case ';':
-      matchNoSkipWhite(self, ';');
       self->currentToken->type = TOKEN_STATEMENT_END;
+      matchNoSkipWhite(self, ';');
       goto exit_common;
   }
 
+  printf("yy: %c\n", self->lookAhead);
   throwError(self, "Unknown token");
   
 exit_common:

@@ -10,13 +10,23 @@ message Constant {
   }
 }
 
+message LineInfo {
+  required string sourceFile = 1;
+  required int32 startColumn = 2;
+  required int32 startLine = 3;
+  required int32 endColumn = 4;
+  required int32 endLine = 5;
+}
+
 message Prototype {
   required uint64 instructions = 1;
   repeated Prototype prototypes = 2;
+
+  // Valid name is `[A-Za-z][A-Za-z]*`
+  required string symbolName = 3;
   
-  // Debug info (optional)
-  repeated int32 lineInfo = 3;
-  optional string sourceFile = 4;
+  optional LineInfo definedAt = 4;
+  repeated LineInfo pcToLine = 5;
 }
 
 message Bytecode {

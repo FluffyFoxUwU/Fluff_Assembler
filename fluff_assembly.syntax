@@ -9,15 +9,15 @@
 ; Basic tokens (easy to lex)
 <register> ::= "%r" { <digit> }+
 <immediate> ::= "#" { <digit> }+
-<ident> ::= <letter> { <letter> | 
-                       <digit> | 
-                       "_" | 
-                       "@"
-                     }+
+<ident> ::= { <letter> | 
+              <digit> | 
+              "_" | 
+              "$"
+            }+
 
 <label_name> ::= <ident>
 
-<label_decl> ::= <label_name> ":"
+<label_decl> ::= ":" <label_name> ":"
 <string> ::= <string-double>
 <labe_ref> ::= "=" <label_name>
 

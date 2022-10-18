@@ -73,7 +73,7 @@ static int setError(struct parser_stage1* self, const char* fmt, ...) {
 // Errors:
 // -ENAVAIL: No token to read
 // -ENOMEM: Out of memory
-static int fetchNextToken(struct parser_stage1* self) {
+static int fetchNextTokenRaw(struct parser_stage1* self) {
   if (self->tokenPointer == self->lexer->allTokens.length) {
     setError(self, "No token to read");
     return -ENAVAIL;
@@ -87,13 +87,23 @@ static int fetchNextToken(struct parser_stage1* self) {
   return 0;
 }
 
+static int fetchNextToken(struct parser_stage1* self) {
+  do {
+    int res = fetchNextTokenRaw(self);
+    if (res < 0)
+      return res;
+  } while (self->currentToken->type == TOKEN_COMMENT);
+  
+  return 0;
+}
+
 // Return 0 on success
 // Errors:
 // -ENAVAIL: No token to read
 // -ENOMEM: Out of memory
 static int fetchArgs(struct parser_stage1* self) {
   int res = 0;
-  while (self->currentToken->type != TOKEN_STATEMENT_END) {
+  while (1) {
     if (vec_push(&self->currentStatement->wholeStatement, self->currentToken) < 0)
       return -ENOMEM;
     if ((res = fetchNextToken(self)) < 0)
@@ -101,11 +111,9 @@ static int fetchArgs(struct parser_stage1* self) {
     
     if (self->currentToken->type != TOKEN_COMMA)
       break;
-    
     if ((res = fetchNextToken(self)) < 0)
       return res;
-  }
-  fetchNextToken(self);
+  };
   
   return 0;
 }
@@ -118,6 +126,7 @@ static int processOne(struct parser_stage1* self, struct statement** result) {
   *self->currentStatement = (struct statement) {};
   vec_init(&self->currentStatement->rawTokens);
 
+  // This cant be moved out from this function
   if (self->isFirstToken) {
     self->isFirstToken = false;
     if (fetchNextToken(self) < 0) 
@@ -205,6 +214,14 @@ int parser_stage1_process(struct parser_stage1* self) {
   while (!self->errorMessage && self->tokenPointer < self->lexer->allTokens.length) {
     if ((res = processOne(self, &statement)) < 0)
       break;
+    
+    if (statement->rawTokens.length == 0) {
+      freeStatement(statement);
+      
+      setError(self, "BUG: Cannot have statement without token (please report)");
+      res = -EFAULT;
+      break;
+    }
     
     if (vec_push(&self->allStatements, statement) < 0) 
       return -ENOMEM;

@@ -1,20 +1,20 @@
-/* Assembly */
+/* Assembly 
 .register_usage #3, hcany, chan;
 ;
+*/
 
-// r0 contain number of iterations
 ldr $r1, #0;
-// Constant 1
+/* Constant 1 */
 ldr $r2, #1;
-// Factorial iteration count
+/* Factorial iteration count */
 ldr $r5, #16;
 
-loop:
+:loop:
   cmp $r1, $r0;
-  bge =quit_benchmark_loop
-  // Factorial result
+  bge =quit_benchmark_loop;
+  /* Factorial result */
   ldr $r3, #1;
-  // Factorial iteration counter
+  /* Factorial iteration counter */
   ldr $r4, #0;
   factorial_loop:
     cmp $r4, $r5;
@@ -22,13 +22,16 @@ loop:
     mul $r3, $r3, $r4;
     add $r4, $r4, $r2;
   b =factorial_loop;
-  quit_factorial_loop:
+  :quit_factorial_loop:
 add $r1, $r1, $r2;
 b =loop;
-quit_benchmark_loop:
+:quit_benchmark_loop:
 
 ret $r3;
 
-ldr $r0, "Hello World!";
+/*
+ldr $r0, /* comment is 
+syntacticly a whitesace 
+* / "Hello World!"; */
 
 

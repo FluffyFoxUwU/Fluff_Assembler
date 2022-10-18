@@ -10,11 +10,10 @@
 
 #define BYTECODE_MAGIC ((uint64_t) 0x466F5855575500LL)
 
-struct vm;
-
 enum constant_type {
   BYTECODE_CONSTANT_INTEGER,
-  BYTECODE_CONSTANT_NUMBER
+  BYTECODE_CONSTANT_NUMBER,
+  BYTECODE_CONSTANT_STRING
 };
 
 struct constant {
@@ -26,7 +25,7 @@ struct constant {
 };
 
 struct bytecode {
-  vec_t(struct constant*) constants;
+  vec_t(struct constant) constants;
   struct prototype* mainPrototype;
 };
 

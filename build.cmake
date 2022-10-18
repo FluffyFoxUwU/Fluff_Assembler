@@ -19,13 +19,16 @@ set(BUILD_SOURCES
   src/code_emitter.c
   src/common.c
   src/parser_stage1.c
+  src/parser_stage2.c
   deps/buffer/buffer.c
+  deps/templated-hashmap/hashmap.c
   deps/vec/vec.c
 )
 
 set(BUILD_INCLUDE_DIRS 
   ./deps/buffer
   ./deps/vec
+  ./deps/templated-hashmap/
 )
 
 # Note that exe does not represent Windows' 
