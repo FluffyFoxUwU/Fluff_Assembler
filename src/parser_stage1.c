@@ -36,6 +36,9 @@ static void freeStatement(struct statement* statement) {
 }
 
 void parser_stage1_free(struct parser_stage1* self) {
+  if (!self)
+    return;
+  
   if (self->canFreeErrorMsg)
     free((void*) self->errorMessage);
   
@@ -133,6 +136,9 @@ static int processOne(struct parser_stage1* self, struct statement** result) {
       return -EFAULT;
   }
   
+  if (vec_push(&self->currentStatement->rawTokens, self->currentToken) < 0)
+    return -ENOMEM;
+   
   // TOKEN_UNKNOWN,
   // TOKEN_REGISTER,
   // TOKEN_IMMEDIATE,
@@ -173,6 +179,10 @@ static int processOne(struct parser_stage1* self, struct statement** result) {
       else
         self->currentStatement->type = STATEMENT_ASSEMBLER_DIRECTIVE;
       
+      if (vec_push(&self->currentStatement->wholeStatement, self->currentToken) < 0) {
+        res = -ENOMEM;
+        goto token_push_error;
+      }
       fetchNextToken(self);
       if ((res = fetchArgs(self)) < 0)
         goto fetch_error;
@@ -190,6 +200,7 @@ static int processOne(struct parser_stage1* self, struct statement** result) {
       goto unexpected_token;
     }
     fetchNextToken(self);
+    vec_pop(&self->currentStatement->rawTokens);
   }
 
   if (result)

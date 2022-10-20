@@ -209,11 +209,7 @@ static int getCharRaw(struct lexer* self) {
     if (buffer_append_n(self->currentLineBuffer, &self->lookAhead, 1) < 0) 
       return -ENOMEM;
   }
-  
-  int raise(int);
-  printf("Yay: %c\n", self->lookAhead);
-  if (self->lookAhead == ';')
-    raise(5);
+
   return 0;
 }
 
@@ -222,6 +218,9 @@ static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args
     fputs(__FILE__ ": FATAL: Nested error!!! (this a bug please report)\n", stderr);
     abort();
   }
+  
+  int errorLine = self->currentLine;
+  int errorColumn = self->currentColumn >= 0 ? self->currentColumn : 0;
   
   while (self->lookAhead != '\n')
     if (getCharRaw(self) < 0)
@@ -238,8 +237,8 @@ static void throwError_vprintf(struct lexer* self, const char* fmt, va_list args
   self->canFreeErrorMessage = true;
   self->errorMessage = common_format_error_message_about_token(self->inputName, 
                                                                "lexing error", 
-                                                               self->currentLine,
-                                                               self->currentColumn >= 0 ? self->currentColumn : 0,
+                                                               errorLine,
+                                                               errorColumn,
                                                                self->currentToken,
                                                                "%s",
                                                                buffer);
@@ -572,8 +571,13 @@ static void process(struct lexer* self) {
       matchNoSkipWhite(self, ';');
       goto exit_common;
   }
+  
+  if (isIdentifierFirstLetter(self->lookAhead)) {
+    self->currentToken->type = TOKEN_IDENTIFIER;
+    self->currentToken->data.identifier = getIdentifier(self);
+    goto exit_common;
+  }
 
-  printf("yy: %c\n", self->lookAhead);
   throwError(self, "Unknown token");
   
 exit_common:

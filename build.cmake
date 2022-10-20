@@ -20,6 +20,8 @@ set(BUILD_SOURCES
   src/common.c
   src/parser_stage1.c
   src/parser_stage2.c
+  src/statement_compiler.c
+  
   deps/buffer/buffer.c
   deps/templated-hashmap/hashmap.c
   deps/vec/vec.c

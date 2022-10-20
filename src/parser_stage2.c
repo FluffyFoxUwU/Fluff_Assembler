@@ -1,16 +1,20 @@
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 
 #include "common.h"
 #include "code_emitter.h"
+#include "hashmap.h"
+#include "hashmap_base.h"
 #include "parser_stage2.h"
 #include "parser_stage1.h"
 #include "lexer.h"
 #include "bytecode/prototype.h"
 #include "bytecode/bytecode.h"
 #include "constants.h"
+#include "statement_compiler.h"
 
 struct parser_stage2* parser_stage2_new(struct parser_stage1* parser) {
   struct parser_stage2* self = malloc(sizeof(*self));
@@ -24,10 +28,15 @@ struct parser_stage2* parser_stage2_new(struct parser_stage1* parser) {
   self->isFirstStatement = true;
   self->currentStatement = NULL;
   self->errorMessage = NULL;
+  self->statementCompiler = NULL;
   self->statementPointer = false;
   
   self->bytecode = bytecode_new();
   if (self->bytecode == NULL)
+    goto failure;
+  
+  self->statementCompiler = statement_compiler_new(self, NULL);
+  if (!self->statementCompiler)
     goto failure;
   
   return self;
@@ -37,9 +46,13 @@ failure:
 }
 
 void parser_stage2_free(struct parser_stage2* self) {
+  if (!self)
+    return;
+  
   if (self->canFreeErrorMsg)
     free((char*) self->errorMessage);
   
+  statement_compiler_free(self->statementCompiler);
   bytecode_free(self->bytecode);
   free(self);
 }
@@ -54,7 +67,7 @@ static int setError(struct parser_stage2* self, const char* fmt, ...) {
   self->errorMessage = common_format_error_message_about_token_valist(self->currentInputName, 
                                                "parsing stage2 error", 
                                                -1, -1,
-                                               self->currentStatement->rawTokens.data[0], 
+                                               self->currentStatement->wholeStatement.data[0], 
                                                fmt, args);
   va_end(args);
   
@@ -87,50 +100,129 @@ static int processPrototype(struct parser_stage2* self, const char* filename, co
   self->currentInputName = filename;
     
   int res = 0;
-  struct code_emitter* emitter = NULL;
-  struct prototype* proto = prototype_new(filename, prototypeName, line, column);
-  if (proto == NULL) {
+  struct parser_stage2_context ctx = {
+    .owner = self,
+    .emitter = NULL,
+    .labelLookup = NULL,
+    .proto = NULL
+  };
+  ctx.proto = prototype_new(filename, prototypeName, line, column);
+  if (ctx.proto == NULL) {
     res = -ENOMEM;
     goto prototype_alloc_fail;
   }
   
-  emitter = code_emitter_new();
-  if (!emitter) {
+  ctx.emitter = code_emitter_new();
+  if (!ctx.emitter) {
     res = -ENOMEM;
     goto emitter_alloc_fail;
   }
 
+  ctx.labelLookup = malloc(sizeof(*ctx.labelLookup));
+  if (!ctx.labelLookup) {
+    res = -ENOMEM;
+    goto label_lookup_alloc_failed;
+  }
+  
+  hashmap_init(ctx.labelLookup, hashmap_hash_string, strcmp);
+
   // Process instructions
-  bool isStartSymbol = strcmp(prototypeName, ASSEMBLER_START_SYMBOL);
+  bool isStartSymbol = strcmp(prototypeName, ASSEMBLER_START_SYMBOL) == 0;
   while (true) {
     if (isStartSymbol && self->statementPointer >= self->parser->allStatements.length)
       break;
     
     struct statement* current = self->currentStatement;
-    if (current->type == STATEMENT_INSTRUCTION) {
-    
-    } else {
-      if ((res = setError(self, "Unexpected statement type!")) == 0)
+    switch (current->type) {
+      case STATEMENT_INSTRUCTION: {
+        int statementCompilerRes = statement_compile(self->statementCompiler, &ctx, 0x00, self->currentStatement);
+        switch (statementCompilerRes) {
+          case -ENOMEM:
+            setError(self, "statement_compiler: Not enough memory");
+            res = -EFAULT;
+            goto processing_error;
+          case -EFAULT:
+            setError(self, "statement_compiler: Code emitter error!");
+            res = -EFAULT;
+            goto processing_error;
+          case -EINVAL:
+            setError(self, "statement_compiler: Invalid state!");
+            res = -EFAULT;
+            goto processing_error;
+          case -EADDRNOTAVAIL:
+            setError(self, "Unknown instruction '%s'", self->currentStatement->wholeStatement.data[0]->data.identifier->data);
+            res = -EFAULT;
+            goto processing_error;
+          default:
+            setError(self, "Unknown statement compiler error %d! (This a bug please report)", statementCompilerRes);
+            res = -EFAULT;
+            goto processing_error;
+        }
+        break;
+      }
+      case STATEMENT_LABEL_DECLARE: {
+        struct token* labelToken = current->wholeStatement.data[0];
+        const char* labelName = buffer_string(labelToken->data.labelDeclName);
+        struct code_emitter_label* label = hashmap_get(ctx.labelLookup, labelName);
+        if (!label)
+          label = code_emitter_label_new(ctx.emitter, labelToken);
+        
+        if (!label) {
+          res = -ENOMEM;
+          goto label_alloc_failed;
+        }
+        
+        if (code_emitter_label_define(ctx.emitter, label) < 0) {
+          setError(self, "Double label definitions: Label \'%s\'", labelName);
+          res = -EFAULT;
+          goto processing_error;
+        }
+
+        int err;        
+        if ((err = hashmap_put(ctx.labelLookup, labelName, label)) < 0) {
+          switch (err) {
+            case -EEXIST:
+              setError(self, "Error adding label: Label \'%s\' (Unexpected duplicate entry please check concurrent use error)", labelName);
+              break;
+            case -ENOMEM:
+              setError(self, "Error adding label: Label \'%s\' (Out of memory)", labelName);
+              break;
+            default:
+              setError(self, "Unknown error adding label (its a bug please report): Label \'%s\' (Error: %s (%d))", labelName, strerror(err), err);
+              break;
+          }
+          res = -EFAULT;
+          goto add_label_error;
+        }
+        break;
+      }
+      default:
+        setError(self, "Unexpected statement type!");
         res = -EFAULT; 
-      goto processing_failed;
+        goto processing_error;
     }
     
     if ((res = getNextStatement(self)) < 0)
       goto get_next_statement_failed;
   }
 
-processing_failed:
+processing_error:
+add_label_error:
+label_alloc_failed:
 get_next_statement_failed:
+  hashmap_cleanup(ctx.labelLookup);
+  free(ctx.labelLookup);
+label_lookup_alloc_failed:
+  code_emitter_free(ctx.emitter); 
 emitter_alloc_fail:
-  code_emitter_free(emitter); 
-  
+  // Only free prototype on failure
   if (res < 0) { 
-    prototype_free(proto);
-    proto = NULL;
+    prototype_free(ctx.proto);
+    ctx.proto = NULL;
   }
   
   if (result)
-    *result = proto;
+    *result = ctx.proto;
 prototype_alloc_fail:
   self->currentInputName = oldInputName;
   return res;

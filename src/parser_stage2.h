@@ -12,12 +12,17 @@
 // which finally processed by protobuf to generate the data)
 
 struct code_emitter_label;
-typedef HASHMAP(buffer_t, struct code_emitter_label*) parser_stage2_label_name_to_label;
-
+struct code_emitter;
+struct prototype;
+struct statement_compiler;
 struct bytecode;
 struct parser_stage1;
+
+typedef HASHMAP(char, struct code_emitter_label) parser_stage2_label_name_to_label;
+
 struct parser_stage2 {
   struct parser_stage1* parser;
+  struct statement_compiler* statementCompiler;
   
   bool isCompleted;
   bool canFreeErrorMsg;
@@ -30,6 +35,13 @@ struct parser_stage2 {
   struct statement* currentStatement;
   
   struct bytecode* bytecode;
+};
+
+struct parser_stage2_context {
+  struct parser_stage2* owner;
+  struct prototype* proto;
+  struct code_emitter* emitter;
+  parser_stage2_label_name_to_label* labelLookup;
 };
 
 struct parser_stage2* parser_stage2_new(struct parser_stage1* lexer);

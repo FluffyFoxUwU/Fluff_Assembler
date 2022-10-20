@@ -28,7 +28,10 @@ struct code_emitter_label {
   bool defined;
   vm_instruction_pointer location;
 
-  struct token definedAt;
+  struct token* definedAt;
+  
+  // Number of time label is used
+  int usageCount;
 };
 
 struct code_emitter {
@@ -56,7 +59,7 @@ void code_emitter_free(struct code_emitter* self);
 // -EINVAL: Finalize a fully or partially finalized code emitter
 int code_emitter_finalize(struct code_emitter* self);
 
-struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, struct token token);
+struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, struct token* token);
 
 /* Return 0 on success
  * Errors:
@@ -71,6 +74,17 @@ int code_emitter_label_define(struct code_emitter* self, struct code_emitter_lab
  * -ENOMEM: Not enough memory
  */ 
 int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_emitter_label* target);
+
+typedef int (^code_emitter_u16x3_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b, uint16_t c);
+typedef int (^code_emitter_u16x2_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b);
+typedef int (^code_emitter_u16x1_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a);
+typedef int (^code_emitter_u16_u32_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint32_t b);
+typedef int (^code_emitter_u16_s32_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, int32_t b);
+typedef int (^code_emitter_label_emitter_func)(struct code_emitter* self, uint8_t cond, struct code_emitter_label* label);
+typedef int (^code_emitter_no_arg_emitter_func)(struct code_emitter* self, uint8_t cond);
+
+// Empty? Well, there no instruction taking one u16, yet
+#define CODE_EMITTER_U16x1_INSTRUCTIONS
 
 #define CODE_EMITTER_U16x3_INSTRUCTIONS \
   X(add, FLUFFYVM_OPCODE_ADD) \
@@ -101,6 +115,11 @@ CODE_EMITTER_U16x2_INSTRUCTIONS
 #define X(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint32_t b);
 CODE_EMITTER_U16_U32_INSTRUCTIONS
+#undef X
+
+#define X(name, op) \
+  int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a);
+CODE_EMITTER_U16x1_INSTRUCTIONS
 #undef X
 
 #define X(name, op) \

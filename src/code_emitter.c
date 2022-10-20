@@ -43,7 +43,7 @@ void code_emitter_free(struct code_emitter* self) {
   free(self);
 }
 
-struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, struct token token) {
+struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, struct token* token) {
   struct code_emitter_label* label = malloc(sizeof(*self));
   if (!label)
     return NULL;
@@ -52,6 +52,7 @@ struct code_emitter_label* code_emitter_label_new(struct code_emitter* self, str
   label->definedAt = token;
   label->location = 0;
   label->owner = self;
+  label->usageCount = 0; 
   
   if (vec_push(&self->labels, label) < 0)
     return NULL;
@@ -68,7 +69,7 @@ int code_emitter_label_define(struct code_emitter* self, struct code_emitter_lab
 }
 
 static inline int emit(struct code_emitter* self, struct instruction ins) {
-  return vec_push(&self->partialInstructions, ins) < 0 ? -EFAULT : 0;
+  return vec_push(&self->partialInstructions, ins) < 0 ? -ENOMEM : 0;
 }
 
 int code_emitter_finalize(struct code_emitter* self) {
@@ -135,6 +136,8 @@ static void setErrorMessage(struct code_emitter* self, const char* filename, int
 }
 
 int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_emitter_label* target) {
+  target->usageCount++;
+  
   vm_instruction_pointer current = self->ip;
   struct instruction ins = {
     .type = INSTRUCTION_DEFERRED,
@@ -142,7 +145,7 @@ int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_e
       // Use of undefined labels
       if (!target->defined) {
         *status = false;
-        setErrorMessage(self, target->definedAt.filename, target->definedAt.startLine, target->definedAt.startColumn, "Use of undefined label!");
+        setErrorMessage(self, target->definedAt->filename, target->definedAt->startLine, target->definedAt->startColumn, "Use of undefined label!");
         return 0;
       }
       
@@ -194,6 +197,16 @@ int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_e
         OP_ARG_B_U16x3(b) \
     }); \
   }
+#define gen_u16x1(name, op) \
+  int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a) { \
+    self->ip++; \
+    return emit(self, (struct instruction) { \
+      .type = INSTRUCTION_NORMAL, \
+      .data.instruction = OP_ARG_OPCODE(op) | \
+        OP_ARG_COND(cond) | \
+        OP_ARG_A_U16x3(a) \
+    }); \
+  }
 #define gen_u16_u32(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint32_t b) { \
     self->ip++; \
@@ -240,6 +253,10 @@ CODE_EMITTER_U16_S32_INSTRUCTIONS
 
 #define X(name, op) gen_u16x3(name, op);
 CODE_EMITTER_U16x3_INSTRUCTIONS
+#undef X
+
+#define X(name, op) gen_u16x1(name, op);
+CODE_EMITTER_U16x1_INSTRUCTIONS
 #undef X
 
 #define X(name, op) gen_no_arg(name, op);
