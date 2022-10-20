@@ -44,6 +44,19 @@ void statement_compiler_free(struct statement_compiler* self);
 
 // Return 0 on success
 // Errors:
+// -EINVAL: Invalid argument
+// -ENOMEM: Not enough memory
+// -EEXIST: An instruction with same name exists
+int statement_compiler_register(struct statement_compiler* self, const char* name, struct emitter_func_entry entry);
+
+// Return 0 on success
+// Errors:
+// -EINVAL: Invalid argument
+// -EADDRNOTAVAIL: Instruction with given name doesnt exist
+int statement_compiler_unregister(struct statement_compiler* self, const char* name);
+
+// Return 0 on success
+// Errors:
 // -EINVAL: Invalid state
 // -ENOMEM: Not enough memory
 // -EFAULT: Code emitter error

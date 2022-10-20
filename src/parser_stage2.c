@@ -15,6 +15,12 @@
 #include "bytecode/bytecode.h"
 #include "constants.h"
 #include "statement_compiler.h"
+#include "util.h"
+
+static int a() {
+  puts("ldr instruction");
+  return 0;
+}
 
 struct parser_stage2* parser_stage2_new(struct parser_stage1* parser) {
   struct parser_stage2* self = malloc(sizeof(*self));
@@ -38,6 +44,10 @@ struct parser_stage2* parser_stage2_new(struct parser_stage1* parser) {
   self->statementCompiler = statement_compiler_new(self, NULL);
   if (!self->statementCompiler)
     goto failure;
+  statement_compiler_register(self->statementCompiler, "ldr", (struct emitter_func_entry) {
+    .type = EMITTER_NO_ARG,
+    .func.noArg = (void*) a
+  });
   
   return self;
 failure:
@@ -136,27 +146,29 @@ static int processPrototype(struct parser_stage2* self, const char* filename, co
     switch (current->type) {
       case STATEMENT_INSTRUCTION: {
         int statementCompilerRes = statement_compile(self->statementCompiler, &ctx, 0x00, self->currentStatement);
-        switch (statementCompilerRes) {
-          case -ENOMEM:
-            setError(self, "statement_compiler: Not enough memory");
-            res = -EFAULT;
-            goto processing_error;
-          case -EFAULT:
-            setError(self, "statement_compiler: Code emitter error!");
-            res = -EFAULT;
-            goto processing_error;
-          case -EINVAL:
-            setError(self, "statement_compiler: Invalid state!");
-            res = -EFAULT;
-            goto processing_error;
-          case -EADDRNOTAVAIL:
-            setError(self, "Unknown instruction '%s'", self->currentStatement->wholeStatement.data[0]->data.identifier->data);
-            res = -EFAULT;
-            goto processing_error;
-          default:
-            setError(self, "Unknown statement compiler error %d! (This a bug please report)", statementCompilerRes);
-            res = -EFAULT;
-            goto processing_error;
+        if (statementCompilerRes < 0) {
+          switch (statementCompilerRes) {
+            case -ENOMEM:
+              setError(self, "statement_compiler: Not enough memory");
+              res = -EFAULT;
+              goto processing_error;
+            case -EFAULT:
+              setError(self, "statement_compiler: Code emitter error!");
+              res = -EFAULT;
+              goto processing_error;
+            case -EINVAL:
+              setError(self, "statement_compiler: Invalid state!");
+              res = -EFAULT;
+              goto processing_error;
+            case -EADDRNOTAVAIL:
+              setError(self, "Unknown instruction '%s'", self->currentStatement->wholeStatement.data[0]->data.identifier->data);
+              res = -EFAULT;
+              goto processing_error;
+            default:
+              setError(self, "Unknown statement compiler error %d! (This a bug please report)", statementCompilerRes);
+              res = -EFAULT;
+              goto processing_error;
+          }
         }
         break;
       }
@@ -205,7 +217,20 @@ static int processPrototype(struct parser_stage2* self, const char* filename, co
     if ((res = getNextStatement(self)) < 0)
       goto get_next_statement_failed;
   }
+  
+  res = code_emitter_finalize(ctx.emitter);
+  if (res == -EFAULT) {
+    char* tmp;
+    util_asprintf(&tmp, "Code emitter error: %s", ctx.emitter->errorMessage);
+    self->errorMessage = tmp;
+    if (!tmp) {
+      res = -ENOMEM;
+      goto finalizing_error;
+    }
+    self->canFreeErrorMsg = true;
+  }
 
+finalizing_error:
 processing_error:
 add_label_error:
 label_alloc_failed:
