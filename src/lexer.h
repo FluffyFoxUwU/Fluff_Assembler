@@ -10,18 +10,23 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#define TOKEN_TYPE \
+  X(TOKEN_UNKNOWN, "unknown") \
+  X(TOKEN_REGISTER, "register") \
+  X(TOKEN_IMMEDIATE, "immediate") \
+  X(TOKEN_IDENTIFIER, "identifier") \
+  X(TOKEN_LABEL_REF, "label reference") \
+  X(TOKEN_LABEL_DECL, "label declare") \
+  X(TOKEN_COMMENT, "comment") \
+  X(TOKEN_DIRECTIVE_NAME, "assembler directive name") \
+  X(TOKEN_COMMA, "comma") \
+  X(TOKEN_STRING, "string") \
+  X(TOKEN_STATEMENT_END, "end of statement")
+
 enum token_type {
-  TOKEN_UNKNOWN,
-  TOKEN_REGISTER,
-  TOKEN_IMMEDIATE,
-  TOKEN_IDENTIFIER,
-  TOKEN_LABEL_REF,
-  TOKEN_LABEL_DECL,
-  TOKEN_COMMENT,
-  TOKEN_DIRECTIVE_NAME,
-  TOKEN_COMMA,
-  TOKEN_STRING,
-  TOKEN_STATEMENT_END // End of statement essentially is `;`
+# define X(name, ...) name,
+  TOKEN_TYPE
+# undef X
 };
 
 struct token {
@@ -37,7 +42,7 @@ struct token {
   buffer_t* fullLine;
 
   union {
-    int64_t reg;
+    int reg;
     int64_t immediate;
 
     buffer_t* labelName;
@@ -92,6 +97,8 @@ void lexer_free(struct lexer* self);
 // -EFAULT: Lexing error
 // -EINVAL: Call on errored lexer instance
 int lexer_process(struct lexer* self);
+
+const char* lexer_get_token_name(enum token_type type);
 
 #endif
 

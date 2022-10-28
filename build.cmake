@@ -21,6 +21,8 @@ set(BUILD_SOURCES
   src/parser_stage1.c
   src/parser_stage2.c
   src/statement_compiler.c
+  src/default_statement_processors.c
+  src/token_iterator.c
   
   deps/buffer/buffer.c
   deps/templated-hashmap/hashmap.c

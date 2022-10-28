@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "code_emitter.h"
 #include "lexer.h"
@@ -35,8 +36,13 @@ int main2() {
   }
   
   struct lexer* lexer = lexer_new(fp, file);
+  assert(lexer);
+  
   struct parser_stage1* parser_stage1 = parser_stage1_new(lexer);
+  assert(parser_stage1);
+  
   struct parser_stage2* parser_stage2 = parser_stage2_new(parser_stage1);
+  assert(parser_stage2);
   
   int res = lexer_process(lexer);
   fclose(fp);

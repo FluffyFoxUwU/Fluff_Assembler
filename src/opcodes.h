@@ -35,6 +35,8 @@
  * Byte 6-7 : Field C
  */
 
+
+// TODO: Find a way to safely encode signed value without relying on unsigned numbers
 #define OP_ARG_OPCODE(op) ((op & 0xFFLL) << 56)
 #define OP_ARG_COND(op) ((op & 0xFFLL) << 48)
 #define OP_ARG_A_U16x3(op) ((op & 0xFFFFLL) << 32)
@@ -44,7 +46,6 @@
 #define OP_ARG_A_U16_U32(op) ((op & 0xFFFFLL) << 32)
 #define OP_ARG_B_U16_U32(op) (op & 0xFFFFFFFFLL)
 
-// TODO: Find a way to safely encode signed value without relying on unsigned cast
 #define OP_ARG_A_U16_S32(op) ((op & 0xFFFFLL) << 32)
 #define OP_ARG_B_U16_S32(op) (op & 0xFFFFFFFFLL)
 
@@ -57,7 +58,25 @@ enum fluffyvm_opcode {
   FLUFFYVM_OPCODE_LAST
 };
 
-struct ________instruction {
+/*
+local COND_AL = 0x00  -- Always     (0b0000'0000)
+local COND_EQ = 0x11  -- Equal      (0b0001'0001)
+local COND_LT = 0x32  -- Less than  (0b0011'0010)
+local COND_NE = 0x10  -- Not equal  (0b0001'0000)
+local COND_GT = 0x30  -- Greater    (0b0011'0000)
+local COND_GE = COND_GT | COND_EQ -- 0x31
+local COND_LE = COND_LT | COND_EQ -- 0x33
+*/
+
+#define OP_COND_AL 0x00
+#define OP_COND_EQ 0x11
+#define OP_COND_LT 0x32
+#define OP_COND_NE 0x10
+#define OP_COND_GT 0x30
+#define OP_COND_GE (OP_COND_GT | OP_COND_EQ)
+#define OP_COND_LE (OP_COND_LT | OP_COND_EQ)
+
+struct opcode_instruction {
   enum fluffyvm_opcode op;
   uint8_t cond;
 

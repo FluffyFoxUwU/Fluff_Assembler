@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <Block.h>
 #include <errno.h>
@@ -32,8 +33,13 @@ void code_emitter_free(struct code_emitter* self) {
   if (self->canFreeErrorMessage)
     free((char*) self->errorMessage);
 
-  struct code_emitter_label* label = 0;
+  struct instruction* ins;
   int i = 0;
+  vec_foreach_ptr(&self->partialInstructions, ins, i)
+    if (ins->type == INSTRUCTION_DEFERRED)
+      Block_release(ins->data.deferred);
+
+  struct code_emitter_label* label = 0;
   vec_foreach(&self->labels, label, i)
     free(label);
   
@@ -69,6 +75,7 @@ int code_emitter_label_define(struct code_emitter* self, struct code_emitter_lab
 }
 
 static inline int emit(struct code_emitter* self, struct instruction ins) {
+  printf("Ins: %016lx\n", ins.data.instruction);
   return vec_push(&self->partialInstructions, ins) < 0 ? -ENOMEM : 0;
 }
 
@@ -81,8 +88,8 @@ int code_emitter_finalize(struct code_emitter* self) {
     return -ENOMEM;
    
   bool status = true;
-  struct instruction* ins;
   int res = 0;
+  struct instruction* ins;
   int i = 0;
   vec_foreach_ptr(&self->partialInstructions, ins, i) {
     vm_instruction instructionFinalized;
@@ -98,6 +105,7 @@ int code_emitter_finalize(struct code_emitter* self) {
         instructionFinalized = ins->data.deferred(&status);
         Block_release(ins->data.deferred);
         ins->data.deferred = NULL;
+        
         if (!status) {
           res = -EFAULT;
           goto fail_deferred;

@@ -12,14 +12,14 @@ ldr $r5, #16;
 :loop:
 :loopa:
   cmp $r1, $r0;
-  bge =quit_benchmark_loop;
+  b.ge =quit_benchmark_loop;
   /* Factorial result */
   ldr $r3, #1;
   /* Factorial iteration counter */
   ldr $r4, #0;
   :factorial_loop:
     cmp $r4, $r5;
-    bge =quit_factorial_loop;
+    b.ge =quit_factorial_loop;
     mul $r3, $r3, $r4;
     add $r4, $r4, $r2;
   b =factorial_loop;

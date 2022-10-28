@@ -340,7 +340,7 @@ static char matchNoSkipWhite(struct lexer* self, char c) {
   return c;
 }
 
-static int64_t getInteger(struct lexer* self) {
+static int64_t getAnySignInteger(struct lexer* self) {
   size_t current = 0;
   
   // Fixed 20 bytes because it 
@@ -349,21 +349,25 @@ static int64_t getInteger(struct lexer* self) {
   // 20 bytes of space in string
   // form (including null terminator)
   char buffer[20] = {};
+  bool isNegative = self->lookAhead == '-';
+  
+  if (isNegative)
+    getChar(self);
   
   if (!isdigit((unsigned char) self->lookAhead))
     throwError(self, "Expected 'integer'");
 
   char digit = self->lookAhead;
   while (isdigit((unsigned char) digit)) {
-    getChar(self);
-    digit = self->lookAhead;
-
     if (current + 1 >= sizeof(buffer))
       throwError(self, "Integer is too large");
 
     buffer[current] = digit;
     buffer[current + 1] = '\0';
     current++;
+    
+    getChar(self);
+    digit = self->lookAhead;
   }
 
   errno = 0;
@@ -371,7 +375,16 @@ static int64_t getInteger(struct lexer* self) {
   if (errno == ERANGE || n > INT64_MAX)
     throwError(self, "Integer is overflowing");
 
+  if (isNegative)
+    n *= -1;
   return (int64_t) n;
+}
+
+static int64_t getPositiveInteger(struct lexer* self) {
+  int64_t integer = getAnySignInteger(self);
+  if (integer < 0)
+    throwError(self, "Expecting positive integer got negative");
+  return integer;
 }
 
 static bool isIdentifierFirstLetter(char chr) {
@@ -394,6 +407,8 @@ static bool isIdentifier(char chr) {
 
   switch (chr) {
     case '_':
+      return true;
+    case '.':
       return true;
     case '$':
       return true;
@@ -449,7 +464,7 @@ static buffer_t* getLabelDecl(struct lexer* self) {
 
 static int64_t getImmediate(struct lexer* self) {
   matchNoSkipWhite(self, '#');
-  return getInteger(self);
+  return getAnySignInteger(self);
 }
 
 static buffer_t* getComment(struct lexer* self) {
@@ -523,13 +538,13 @@ error_push_cleanup:
   return NULL;
 }
 
-static int64_t getRegister(struct lexer* self) {
+static int getRegister(struct lexer* self) {
   matchNoSkipWhite(self, '$');
   matchNoSkipWhite(self, 'r');
-  int64_t registerID = getInteger(self);
+  int64_t registerID = getPositiveInteger(self);
   if (registerID >= VM_MAX_REGISTERS)
     throwError(self, "Invalid register!");
-  return registerID;
+  return (int) registerID;
 }
 
 static void process(struct lexer* self) {
@@ -663,5 +678,15 @@ int lexer_process(struct lexer* self) {
   return res;
 }
 
-
+const char* lexer_get_token_name(enum token_type type) {
+  static const char* lookup[] = {
+#   define X(t, str, ...) [t] = str,
+    TOKEN_TYPE
+#   undef X
+  };
+  
+  if (type < 0 || type > ARRAY_SIZE(lookup))
+    return NULL;
+  return lookup[type];
+}
 

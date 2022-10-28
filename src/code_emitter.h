@@ -75,13 +75,13 @@ int code_emitter_label_define(struct code_emitter* self, struct code_emitter_lab
  */ 
 int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_emitter_label* target);
 
-typedef int (^code_emitter_u16x3_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b, uint16_t c);
-typedef int (^code_emitter_u16x2_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b);
-typedef int (^code_emitter_u16x1_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a);
-typedef int (^code_emitter_u16_u32_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint32_t b);
-typedef int (^code_emitter_u16_s32_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, int32_t b);
-typedef int (^code_emitter_label_emitter_func)(struct code_emitter* self, uint8_t cond, struct code_emitter_label* label);
-typedef int (^code_emitter_no_arg_emitter_func)(struct code_emitter* self, uint8_t cond);
+typedef int (*code_emitter_u16x3_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b, uint16_t c);
+typedef int (*code_emitter_u16x2_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b);
+typedef int (*code_emitter_u16x1_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a);
+typedef int (*code_emitter_u16_u32_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, uint32_t b);
+typedef int (*code_emitter_u16_s32_emitter_func)(struct code_emitter* self, uint8_t cond, uint16_t a, int32_t b);
+typedef int (*code_emitter_label_emitter_func)(struct code_emitter* self, uint8_t cond, struct code_emitter_label* label);
+typedef int (*code_emitter_no_arg_emitter_func)(struct code_emitter* self, uint8_t cond);
 
 // Empty? Well, there no instruction taking one u16, yet
 #define CODE_EMITTER_U16x1_INSTRUCTIONS

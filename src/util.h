@@ -13,5 +13,8 @@ size_t util_asprintf(char** buffer, const char* fmt, ...);
 
 typedef void (^runnable_block)();
 
+// Tiny useful macro from Linux kernel
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 #endif
 
