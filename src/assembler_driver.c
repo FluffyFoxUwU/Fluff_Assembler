@@ -44,7 +44,7 @@ int assembler_driver_assemble(const char* inputName, FILE* inputFile, const char
     goto stage1_failure;
   }
   
-  if ((parser_stage2_process(parser_stage2, &bytecode)) < 0) {
+  if ((res = parser_stage2_process(parser_stage2, &bytecode)) < 0) {
     errorMessage = strdup(parser_stage2->errorMessage);
     goto stage2_failure;
   }

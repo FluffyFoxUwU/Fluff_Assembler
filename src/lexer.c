@@ -619,8 +619,13 @@ static int lexer_process_one(struct lexer* self, struct token** result) {
   if (self->isFirstToken) {
     self->isFirstToken = false;
     
-    getChar(self);
+    if (getCharAllowEOF(self) == -ENAVAIL)
+      goto early_eof;
+    
     skipWhite(self);
+    
+    if (self->isEOF)
+      goto early_eof;
   }
   
   // Move start position
@@ -632,7 +637,7 @@ static int lexer_process_one(struct lexer* self, struct token** result) {
   self->currentTokenBuffer = NULL;
   
   skipWhite(self);
-  
+
   // Save to token struct storage allocated earlier
   if (result)
     *result = self->currentToken;
@@ -650,6 +655,13 @@ lexer_failure:
   freeToken(self->currentToken);
   
   self->currentTokenBuffer = NULL;
+  self->currentToken = NULL;
+  return res;
+
+early_eof:
+  if (result)
+    *result = NULL;
+  freeToken(self->currentToken);
   self->currentToken = NULL;
   return res;
 }
@@ -670,6 +682,10 @@ int lexer_process(struct lexer* self) {
     //   freeToken(currentToken);
     //   continue;
     // }
+    
+    // Successful call but return NULL token signals early EOF
+    if (!currentToken)
+      break;
     
     if (vec_push(&self->allTokens, currentToken) < 0)
       return -ENOMEM;

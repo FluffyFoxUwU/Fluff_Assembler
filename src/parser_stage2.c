@@ -112,19 +112,24 @@ static int setError(struct parser_stage2* self, const char* fmt, ...) {
   return 0;
 }
 
-// Error:
-// -ERANGE: No data to read
-// -ENOMEM: Not enough memory
-static int getNextStatement(struct parser_stage2* self) {
-  if (self->nextStatementPointer >= self->parser->allStatements.length) {
-    if (setError(self, "No statement to read") < 0)
-      return -ENOMEM; 
+static int getNextStatementRaw(struct parser_stage2* self) {
+  if (self->nextStatementPointer >= self->parser->allStatements.length) 
     return -ERANGE;
-  }
   
   self->currentStatement = self->parser->allStatements.data[self->nextStatementPointer];
   self->nextStatementPointer++;
   return 0;
+}
+
+// Error:
+// -ERANGE: No data to read
+// -ENOMEM: Not enough memory
+static int getNextStatement(struct parser_stage2* self) {
+  int res = getNextStatementRaw(self);
+  if (res == -ERANGE && setError(self, "No statement to read") < 0)
+    res = -ENOMEM;
+  
+  return res;
 }
 
 static int processInstruction(struct parser_stage2* self, struct parser_stage2_context* ctx) {
@@ -284,6 +289,9 @@ static int processPrototype(struct parser_stage2* self, const char* filename, co
   bool firstIteration = true;
   bool prototypeEnds = false;
   
+  if (self->parser->allStatements.length == 0)
+    goto early_eof;
+  
   while (true) {
     if (self->nextStatementPointer >= self->parser->allStatements.length && !firstIteration) {
       if (!isEOFSafe) {
@@ -346,7 +354,8 @@ prototype_ended:
     if (prototypeEnds) 
       break;
   }
-  
+
+early_eof:
   res = code_emitter_finalize(ctx.emitter);
   if (res == -EFAULT) {
     char* tmp;
@@ -403,10 +412,10 @@ int parser_stage2_process(struct parser_stage2* self, struct bytecode** result) 
   self->bytecode = bytecode_new();
   if (self->bytecode == NULL) {
     res = -ENOMEM;
-    goto failure;
+    goto bytecode_alloc_failure;
   }
   
-  if (getNextStatement(self) < 0) {
+  if (getNextStatementRaw(self) == -EFAULT) {
     res = -EFAULT;
     goto get_next_statement_error;
   }
@@ -418,7 +427,7 @@ get_next_statement_error:
     bytecode_free(self->bytecode);
     self->bytecode = NULL;
   }
-failure:
+bytecode_alloc_failure:
   *result = self->bytecode;
   return res;
 }

@@ -210,6 +210,10 @@ int parser_stage1_process(struct parser_stage1* self) {
   
   struct statement* statement;
   int res = 0;
+  
+  if (self->lexer->allTokens.length == 0)
+    goto early_eof;
+  
   while (!self->errorMessage && self->nextTokenPointer <= self->lexer->allTokens.length) {
     if ((res = processOne(self, &statement)) < 0)
       break;
@@ -226,5 +230,6 @@ int parser_stage1_process(struct parser_stage1* self) {
       return -ENOMEM;
   }
   
+early_eof:
   return res;
 }
