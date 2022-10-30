@@ -29,8 +29,10 @@ int token_iterator_next_identifier(struct token_iterator* self, const char** ide
     goto next_failed;
   if (tmp->type != TOKEN_IDENTIFIER)
     return -EINVAL;
-  
+
 next_failed:
+  if (ident && res == 0)
+    *ident = buffer_string(tmp->data.identifier);
   return res;
 }
 

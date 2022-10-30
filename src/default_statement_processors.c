@@ -7,9 +7,11 @@
 #include "parser_stage2.h"
 #include "statement_compiler.h"
 #include "code_emitter.h"
+#include "bytecode/bytecode.h"
 #include "token_iterator.h"
 #include "util.h"
 #include "opcodes.h"
+#include "vm_types.h"
 
 struct entry {
   const char* name;
@@ -91,6 +93,29 @@ static int getLabel(struct statement_processor_context* ctx, struct code_emitter
   return res;
 }
 
+static int slowIntegerLdr(struct statement_processor_context* ctx, int reg, int64_t integer) {
+  if (integer < VM_INT_MIN || integer > VM_INT_MAX) {
+    setErr(ctx, false, "Integer is larger than largest supported integer");
+    return -EFAULT;
+  }
+
+  int constIndex = bytecode_add_constant_int(ctx->owner->parser->bytecode, (vm_int) integer);
+  if (constIndex < 0)
+    return constIndex;
+  return code_emitter_emit_ldconst(ctx->stage2Context->emitter, ctx->funcEntry->udata1, reg, constIndex);
+}
+
+static int fastIntegerLdr(struct statement_processor_context* ctx, int reg, int64_t integer) {
+  return code_emitter_emit_ldint(ctx->stage2Context->emitter, ctx->funcEntry->udata1, reg, (int32_t) integer);
+}
+
+static int stringLdr(struct statement_processor_context* ctx, int reg, const char* string) {
+  int constIndex = bytecode_add_constant_string(ctx->owner->parser->bytecode, string);
+  if (constIndex < 0)
+    return constIndex;
+  return code_emitter_emit_ldconst(ctx->stage2Context->emitter, ctx->funcEntry->udata1, reg, constIndex);
+}
+
 static int ins_ldr(struct statement_processor_context* ctx) {
   int res = 0;
   int reg = getRegister(ctx);
@@ -103,20 +128,22 @@ static int ins_ldr(struct statement_processor_context* ctx) {
   
   switch (token->type) {
     case TOKEN_IMMEDIATE:
-      // Loads integer into register
-      if (token->data.immediate < INT32_MIN || token->data.immediate > INT32_MAX) {
-        setErr(ctx, false, "ins_ldr: Second operand size beyond 32-bit signed integer!");
-        res = -EFAULT;
-        goto invalid_operand;
-      }
-      res = code_emitter_emit_ldint(ctx->stage2Context->emitter, ctx->funcEntry->udata1, reg, (int) token->data.immediate);
+      // Inline the integer into the instruction if possible
+      // else use slow one which loads from constant pool
+      if (token->data.immediate >= INT32_MIN && token->data.immediate <= INT32_MAX)
+        res = fastIntegerLdr(ctx, reg, token->data.immediate);
+      else
+        res = slowIntegerLdr(ctx, reg, token->data.immediate);
+      break;
+    case TOKEN_STRING:
+      res = stringLdr(ctx, reg, buffer_string(token->data.string));
       break;
     default:
       setErr(ctx, false, "ins_ldr: Unknown second operand");
+      res = -EFAULT;
       break;
   }
-  
-invalid_operand:
+
   return res;
 }
 
@@ -151,6 +178,7 @@ invalid_operand:
   }
 
 macro_no_arg_ins(ins_nop, code_emitter_emit_nop);
+macro_no_arg_ins(ins_ret, code_emitter_emit_ret);
 
 macro_two_reg_ins(ins_cmp, code_emitter_emit_cmp);
 macro_two_reg_ins(ins_mov, code_emitter_emit_mov);
@@ -187,10 +215,12 @@ static struct entry instructions[] = {
   {name ".le", func, OP_COND_LE}, \
   
   // Pseudo instructions
+  // It can be ldint or ldconst based on argument
   instruction("ldr", ins_ldr)
   
   // No arg instructions
   instruction("nop", ins_nop)
+  instruction("ret", ins_ret)
   
   // Single label instructions
   instruction("b", ins_b)

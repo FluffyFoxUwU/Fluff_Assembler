@@ -9,6 +9,7 @@
 #include "common.h"
 #include "vm_types.h"
 #include "opcodes.h"
+#include "vm_limits.h"
 #include "vec.h"
 
 struct code_emitter* code_emitter_new() {
@@ -75,8 +76,12 @@ int code_emitter_label_define(struct code_emitter* self, struct code_emitter_lab
 }
 
 static inline int emit(struct code_emitter* self, struct instruction ins) {
-  printf("Ins: %016lx\n", ins.data.instruction);
-  return vec_push(&self->partialInstructions, ins) < 0 ? -ENOMEM : 0;
+  if (self->ip >= VM_LIMIT_MAX_CODE)
+    return -ENOSPC;
+  
+  int ret = vec_push(&self->partialInstructions, ins) < 0 ? -ENOMEM : 0;
+  self->ip++;
+  return ret;
 }
 
 int code_emitter_finalize(struct code_emitter* self) {
@@ -177,14 +182,12 @@ int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_e
   if (ins.data.deferred == NULL)
     return -ENOMEM;
 
-  self->ip++;
   return emit(self, ins);
 }
 
 // Other instructions generation UwU
 #define gen_u16x3(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b, uint16_t c) { \
-    self->ip++; \
     return emit(self, (struct instruction) { \
       .type = INSTRUCTION_NORMAL, \
       .data.instruction = OP_ARG_OPCODE(op) | \
@@ -196,7 +199,6 @@ int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_e
   }
 #define gen_u16x2(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b) { \
-    self->ip++; \
     return emit(self, (struct instruction) { \
       .type = INSTRUCTION_NORMAL, \
       .data.instruction = OP_ARG_OPCODE(op) | \
@@ -207,7 +209,6 @@ int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_e
   }
 #define gen_u16x1(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a) { \
-    self->ip++; \
     return emit(self, (struct instruction) { \
       .type = INSTRUCTION_NORMAL, \
       .data.instruction = OP_ARG_OPCODE(op) | \
@@ -228,7 +229,6 @@ int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_e
   }
 #define gen_u16_s32(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, int32_t b) { \
-    self->ip++; \
     return emit(self, (struct instruction) { \
       .type = INSTRUCTION_NORMAL, \
       .data.instruction = OP_ARG_OPCODE(op) | \
@@ -239,7 +239,6 @@ int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_e
   }
 #define gen_no_arg(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond) { \
-    self->ip++; \
     return emit(self, (struct instruction) { \
       .type = INSTRUCTION_NORMAL, \
       .data.instruction = OP_ARG_OPCODE(op) | \

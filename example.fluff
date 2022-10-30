@@ -28,11 +28,21 @@ add $r1, $r1, $r2;
 b =loop;
 :quit_benchmark_loop:
 
-ret $r3;
+/* Return value to use is at r0 */ 
+mov $r3, $r0;
+ret;
 
-/*
-ldr $r0, /* comment is 
-syntacticly a whitesace 
-* / "Hello World!"; */
+.start_prototype test_proto;
+  ldr $r0, "Hello World!1";
+  ldr $r1, "Hello World!2";
+  ldr $r2, "Hello World!3";
+.end_prototype;
+
+ldr $r1, "yay lets go1";
+ldr $r1, "yay lets go2";
+ldr $r2, #4294967296;
+
+
+
 
 

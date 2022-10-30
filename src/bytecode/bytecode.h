@@ -7,8 +7,7 @@
 #include "bytecode/prototype.h"
 #include "vec.h"
 #include "vm_types.h"
-
-#define BYTECODE_MAGIC ((uint64_t) 0x466F5855575500LL)
+#include "buffer.h"
 
 enum constant_type {
   BYTECODE_CONSTANT_INTEGER,
@@ -21,6 +20,7 @@ struct constant {
   union {
     vm_int integer;
     vm_number number;
+    const char* string;
   } data;
 };
 
@@ -31,6 +31,16 @@ struct bytecode {
 
 struct bytecode* bytecode_new();
 void bytecode_free(struct bytecode* self);
+
+// bytecode_add_constant_* return constant index
+// On error return negative errno
+// Errors:
+// -ENOMEM: Not enough memory
+// -ENOSPC: Number of constants exceeded VM_LIMIT_MAX_CONSTANT
+int bytecode_add_constant_generic(struct bytecode* self, struct constant constant);
+int bytecode_add_constant_int(struct bytecode* self, vm_int integer);
+int bytecode_add_constant_number(struct bytecode* self, vm_number number);
+int bytecode_add_constant_string(struct bytecode* self, const char* integer);
 
 #endif
 

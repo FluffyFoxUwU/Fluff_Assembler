@@ -33,7 +33,7 @@ struct parser_stage2 {
   
   const char* currentInputName;
   
-  int statementPointer; 
+  int nextStatementPointer; 
   struct statement* currentStatement;
   
   struct bytecode* bytecode;
@@ -59,7 +59,7 @@ void parser_stage2_free(struct parser_stage2* self);
 // -EFAULT: Error parsing (check self->errormsg)
 // -ENOMEM: Not enough memory
 // -EINVAL: Attempt to process failed instance
-int parser_stage2_process(struct parser_stage2* self);
+int parser_stage2_process(struct parser_stage2* self, struct bytecode** result);
 
 // 0 on success
 // Errors:

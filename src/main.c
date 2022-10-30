@@ -1,15 +1,8 @@
-#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <assert.h>
 
-#include "code_emitter.h"
-#include "lexer.h"
-#include "parser_stage1.h"
-#include "parser_stage2.h"
-#include "vec.h"
-#include "vm_types.h"
+#include "assembler_driver.h"
 
 /*
 Pipeline for source to bytecode generation
@@ -28,69 +21,48 @@ Source file
 */
 
 int main2() {
-  const char* file = "../example.fluff";
-  FILE* fp = fopen(file, "r");
-  if (!fp) {
-    puts("Cannot open file!");
-    return EXIT_FAILURE;
+  int exitRes = EXIT_SUCCESS;
+  const char* inputFile = "../example.fluff";
+  const char* outputFile = "../example.fluff_bin";
+  FILE* input = NULL;
+  FILE* output = NULL;
+  
+  if ((input = fopen(inputFile, "r")) == NULL) {
+    printf("Cannot open input file!");
+    exitRes = EXIT_FAILURE;
+    goto input_open_failure;
   }
   
-  struct lexer* lexer = lexer_new(fp, file);
-  assert(lexer);
-  
-  struct parser_stage1* parser_stage1 = parser_stage1_new(lexer);
-  assert(parser_stage1);
-  
-  struct parser_stage2* parser_stage2 = parser_stage2_new(parser_stage1);
-  assert(parser_stage2);
-  
-  int res = lexer_process(lexer);
-  fclose(fp);
-  
+  if ((output = fopen(outputFile, "w")) == NULL) {
+    printf("Cannot open output file!");
+    exitRes = EXIT_FAILURE;
+    goto output_open_failure;
+  }
+
+  void* compiled = NULL;
+  size_t compiledSize = 0;
+  const char* errorMessage = NULL;
+  int res = assembler_driver_assemble(inputFile, input, &errorMessage, &compiled, &compiledSize);
   if (res < 0) {
-    printf("Lexer error: %s (errno %d)\n", lexer->errorMessage, res);
-    goto failure;
+    printf("Assembler failure: %s\n", errorMessage);
+    free((char*) errorMessage);
+    exitRes = EXIT_FAILURE;
+    goto assemble_failure;
   }
   
-  res = parser_stage1_process(parser_stage1);
-  if (res < 0) {
-    printf("Stage1 parser error: %s (errno %d)\n", parser_stage1->errorMessage, res);
-    goto failure;
-  }
+  // Write compiled code
+  printf("Writing %zu bytes of bytecode\n", compiledSize);
+  if (fwrite(compiled, 1, compiledSize, output) != compiledSize)
+    goto write_result_failure;
   
-  res = parser_stage2_process(parser_stage2);
-  if (res < 0) {
-    printf("Stage2 parser error: %s (errno %d)\n", parser_stage2->errorMessage, res);
-    goto failure;
-  }
-  
-  failure:
-  parser_stage2_free(parser_stage2);
-  parser_stage1_free(parser_stage1);
-  lexer_free(lexer);
-  
-  /*
-  struct code_emitter* emitter = code_emitter_new();
-  struct code_emitter_label* label = code_emitter_label_new(emitter, (struct token) {
-    .filename = "<test.fluff>"
-  });
-  
-  code_emitter_emit_jmp(emitter, 0x00, label);
-  code_emitter_emit_add(emitter, 0x00, 0, 0, 0);
-  code_emitter_emit_add(emitter, 0x00, 0, 0, 0);
-  code_emitter_emit_add(emitter, 0x00, 0, 0, 0);
-  code_emitter_label_define(emitter, label);
-  
-  int res;
-  if ((res = code_emitter_finalize(emitter)) < 0)
-    printf("emitter error: %s\n", emitter->errorMessage);
-  
-  vm_instruction ins = 0;
-  int i = 0;
-  vec_foreach(&emitter->instructions, ins, i)
-    printf("Ins: 0x%lx\n", ins);
-  code_emitter_free(emitter);
-  */
-  return EXIT_SUCCESS;
+  free(compiled);
+
+write_result_failure:
+assemble_failure:
+  fclose(output);
+output_open_failure:
+  fclose(input);
+input_open_failure:
+  return exitRes;
 }
 

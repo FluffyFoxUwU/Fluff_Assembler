@@ -40,7 +40,7 @@ struct parser_stage1 {
   struct token* currentToken;
   struct statement* currentStatement;
   
-  int tokenPointer;
+  int nextTokenPointer;
   vec_t(struct statement*) allStatements;
 };
 

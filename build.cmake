@@ -23,6 +23,8 @@ set(BUILD_SOURCES
   src/statement_compiler.c
   src/default_statement_processors.c
   src/token_iterator.c
+  src/bytecode/protobuf_serializer.c
+  src/assembler_driver.c
   
   deps/buffer/buffer.c
   deps/templated-hashmap/hashmap.c

@@ -16,7 +16,7 @@ struct parser_stage1* parser_stage1_new(struct lexer* lexer) {
   self->lexer = lexer;
   self->canFreeErrorMsg = false;
   self->errorMessage = NULL;
-  self->tokenPointer = 0;
+  self->nextTokenPointer = 0;
   self->isFirstToken = true;
   self->currentStatement = NULL;
   self->currentToken = NULL;
@@ -44,9 +44,9 @@ void parser_stage1_free(struct parser_stage1* self) {
   
   struct statement* current = NULL;
   int i = 0;
-  vec_foreach(&self->allStatements, current, i) {
+  vec_foreach(&self->allStatements, current, i)
     freeStatement(current);
-  }
+  
   vec_deinit(&self->allStatements);
   free(self);
 }
@@ -77,13 +77,13 @@ static int setError(struct parser_stage1* self, const char* fmt, ...) {
 // -ENAVAIL: No token to read
 // -ENOMEM: Out of memory
 static int fetchNextTokenRaw(struct parser_stage1* self) {
-  if (self->tokenPointer == self->lexer->allTokens.length) {
+  if (self->nextTokenPointer >= self->lexer->allTokens.length) {
     setError(self, "No token to read");
     return -ENAVAIL;
   }
   
-  self->currentToken = self->lexer->allTokens.data[self->tokenPointer];
-  self->tokenPointer++;
+  self->currentToken = self->lexer->allTokens.data[self->nextTokenPointer];
+  self->nextTokenPointer++;
   
   if (vec_push(&self->currentStatement->rawTokens, self->currentToken) < 0)
     return -ENOMEM;
@@ -106,7 +106,7 @@ static int fetchNextToken(struct parser_stage1* self) {
 // -ENOMEM: Out of memory
 static int fetchArgs(struct parser_stage1* self) {
   int res = 0;
-  while (1) {
+  while (self->currentToken->type != TOKEN_COMMA && self->currentToken->type != TOKEN_STATEMENT_END) {
     if (vec_push(&self->currentStatement->wholeStatement, self->currentToken) < 0)
       return -ENOMEM;
     if ((res = fetchNextToken(self)) < 0)
@@ -138,18 +138,6 @@ static int processOne(struct parser_stage1* self, struct statement** result) {
   
   if (vec_push(&self->currentStatement->rawTokens, self->currentToken) < 0)
     return -ENOMEM;
-   
-  // TOKEN_UNKNOWN,
-  // TOKEN_REGISTER,
-  // TOKEN_IMMEDIATE,
-  // TOKEN_IDENTIFIER,
-  // TOKEN_LABEL_REF,
-  // TOKEN_LABEL_DECL,
-  // TOKEN_COMMENT,
-  // TOKEN_DIRECTIVE_NAME,
-  // TOKEN_COMMA,
-  // TOKEN_STRING,
-  // TOKEN_STATEMENT_END
 
   bool needEndOfStatament = true;
   switch (self->currentToken->type) {
@@ -222,7 +210,7 @@ int parser_stage1_process(struct parser_stage1* self) {
   
   struct statement* statement;
   int res = 0;
-  while (!self->errorMessage && self->tokenPointer < self->lexer->allTokens.length) {
+  while (!self->errorMessage && self->nextTokenPointer <= self->lexer->allTokens.length) {
     if ((res = processOne(self, &statement)) < 0)
       break;
     

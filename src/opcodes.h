@@ -23,7 +23,8 @@
   X(OPCODE_JMP_BACKWARD, 0x09, "jmp_backward", 2, OP_LAYOUT_u32) \
   X(OPCODE_CMP, 0x0A, "cmp", 2, OP_LAYOUT_u16x3) \
   X(OPCODE_LOAD_CONSTANT, 0x0B, "load_constant", 3, OP_LAYOUT_u16_u32) \
-  X(OPCODE_LOAD_INTEGER, 0x0C, "load_integer", 3, OP_LAYOUT_u16_s32)
+  X(OPCODE_LOAD_INTEGER, 0x0C, "load_integer", 3, OP_LAYOUT_u16_s32) \
+  X(OPCODE_RET, 0x0D, "ret", 0, OP_LAYOUT_u16x3) \
 
 /*
  * Instruction format

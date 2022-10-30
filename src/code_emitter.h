@@ -72,6 +72,7 @@ int code_emitter_label_define(struct code_emitter* self, struct code_emitter_lab
  * 0 on success
  * Errors:
  * -ENOMEM: Not enough memory
+ * -ENOSPC: Number of instructions is exceeding VM_LIMIT_MAX_CODE
  */ 
 int code_emitter_emit_jmp(struct code_emitter* self, uint8_t cond, struct code_emitter_label* target);
 
@@ -106,6 +107,7 @@ typedef int (*code_emitter_no_arg_emitter_func)(struct code_emitter* self, uint8
 
 #define CODE_EMITTER_NO_ARG_INSTRUCTIONS \
   X(nop, FLUFFYVM_OPCODE_NOP) \
+  X(ret, FLUFFYVM_OPCODE_RET) \
 
 #define X(name, op) \
   int code_emitter_emit_ ## name(struct code_emitter* self, uint8_t cond, uint16_t a, uint16_t b);

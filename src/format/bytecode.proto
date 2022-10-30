@@ -5,8 +5,8 @@ package FluffyVmFormat.Bytecode;
 message Constant {
   oneof data {
     bytes data_str = 2;
-    sint64 data_longNum = 3;
-    double data_doubleNum = 4;
+    sint64 data_integer = 3;
+    double data_number = 4;
   }
 }
 
@@ -19,10 +19,9 @@ message LineInfo {
 }
 
 message Prototype {
-  required uint64 instructions = 1;
+  repeated uint64 instructions = 1;
   repeated Prototype prototypes = 2;
 
-  // Valid name is `[A-Za-z][A-Za-z]*`
   required string symbolName = 3;
   
   optional LineInfo definedAt = 4;
@@ -30,7 +29,7 @@ message Prototype {
 }
 
 message Bytecode {
-  required uint32 version = 1;
+  required uint64 version = 1;
   repeated Constant constants = 2;
   required Prototype mainPrototype = 3;
 }

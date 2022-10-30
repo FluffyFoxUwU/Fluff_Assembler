@@ -39,6 +39,11 @@ void prototype_free(struct prototype* self) {
   if (!self)
     return;
   
+  int i = 0;
+  struct prototype* current = NULL;
+  vec_foreach(&self->prototypes, current, i)
+    prototype_free(current);
+  
   vec_deinit(&self->prototypes);
   vec_deinit(&self->instructions);
   free((char*) self->prototypeName);

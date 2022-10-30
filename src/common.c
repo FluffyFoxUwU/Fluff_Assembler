@@ -14,7 +14,7 @@ char* common_format_error_message_valist(const char* filename, const char* sourc
   if (!errmsg)
     return NULL;
   
-  util_asprintf(&result, "%s: %s:%d:%d: %s", source, filename, line + 1, column + 1, errmsg);
+  util_asprintf(&result, "%s: %s:%d:%d: %s", source, filename, line < 0 ? -1 : line + 1, column < 0 ? -1 : column + 1, errmsg);
   free(errmsg);
   return result;
 }
