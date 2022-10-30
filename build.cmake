@@ -4,10 +4,12 @@ set(BUILD_PROJECT_NAME "Fluff Assembler")
 
 # We're making library
 set(BUILD_IS_LIBRARY NO)
+set(BUILD_IS_KERNEL NO)
 
 # If we want make libary and
 # executable project
 set(BUILD_INSTALL_EXECUTABLE YES)
+set(BUILD_MAXIMUM_PERFORMANCE NO)
 
 # Sources which common between exe and library
 set(BUILD_SOURCES

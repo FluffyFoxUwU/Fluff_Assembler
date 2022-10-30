@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <time.h>
 
 #include "assembler_driver.h"
 
@@ -42,7 +43,12 @@ int main2() {
   void* compiled = NULL;
   size_t compiledSize = 0;
   const char* errorMessage = NULL;
+  
+  clock_t startClock = clock();
   int res = assembler_driver_assemble(inputFile, input, &errorMessage, &compiled, &compiledSize);
+  double cpuTime = ((double) clock() - (double) startClock) / CLOCKS_PER_SEC;
+  printf("Compiling took %.2lf miliseconds\n", cpuTime * 1000);
+  
   if (res < 0) {
     printf("Assembler failure: %s\n", errorMessage);
     free((char*) errorMessage);
