@@ -14,9 +14,9 @@
 #include "vm_types.h"
 
 // Sanity checks (to catch mistakes of changing sizes without changing the proto file)
-static_assert(sizeof(vm_instruction) == FIELD_SIZEOF(FluffyVmFormat__Bytecode__Prototype, instructions[0]), "vm_instruction is not equal to *prototype.instructions in proto file");
-static_assert(sizeof(vm_int) == FIELD_SIZEOF(FluffyVmFormat__Bytecode__Constant, data_integer), "vm_int is not equal to constant.data_integer in proto file");
-static_assert(sizeof(vm_number) == FIELD_SIZEOF(FluffyVmFormat__Bytecode__Constant, data_number), "vm_number is not equal to constant.data_integer in proto file");
+static_assert(sizeof(vm_instruction) == FIELD_SIZEOF(FluffyVmFormat__Bytecode__Prototype, instructions[0]));
+static_assert(sizeof(vm_int) == FIELD_SIZEOF(FluffyVmFormat__Bytecode__Constant, data_integer));
+static_assert(sizeof(vm_number) == FIELD_SIZEOF(FluffyVmFormat__Bytecode__Constant, data_number));
 
 static void freeConstant(FluffyVmFormat__Bytecode__Constant* constant) {
   free(constant);
@@ -90,6 +90,7 @@ static int convertPrototype(struct prototype* prototype, FluffyVmFormat__Bytecod
     return -ENOMEM;
   
   *result = (FluffyVmFormat__Bytecode__Prototype) FLUFFY_VM_FORMAT__BYTECODE__PROTOTYPE__INIT;
+  result->symbolname = (char*) prototype->prototypeName;
   result->n_prototypes = prototype->prototypes.length;
   result->prototypes = calloc(prototype->prototypes.length, sizeof(void*));
   if (result->prototypes == NULL) {

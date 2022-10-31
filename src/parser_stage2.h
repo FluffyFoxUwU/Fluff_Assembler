@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "buffer.h"
 #include "vec.h"
@@ -20,7 +21,13 @@ struct parser_stage1;
 struct token_iterator;
 struct parser_stage2_context;
 
-typedef HASHMAP(char, struct code_emitter_label) parser_stage2_label_name_to_label;
+struct prototype_registry_entry {
+  uint32_t id;
+  uint32_t resolvedLocation;
+  
+  struct prototype* proto;
+  const char* name;
+};
 
 struct parser_stage2 {
   struct parser_stage1* parser;
@@ -46,7 +53,11 @@ struct parser_stage2_context {
   struct parser_stage2* owner;
   struct prototype* proto;
   struct code_emitter* emitter;
-  parser_stage2_label_name_to_label* labelLookup;
+  
+  HASHMAP(char, struct code_emitter_label) labelLookup;
+  HASHMAP(char, struct prototype_registry_entry) prototypesRegistry;
+  vec_t(struct prototype_registry_entry*) prototypesRegistryEntries;
+  vec_t(struct statement*) ipToStamement;
   
   struct token_iterator* iterator;
 };
@@ -65,6 +76,12 @@ int parser_stage2_process(struct parser_stage2* self, struct bytecode** result);
 // Errors:
 // -ENOMEM: Not enough memory
 int parser_stage2_get_label(struct parser_stage2_context* ctx, const char* name, struct code_emitter_label** result);
+
+// Prototype temporary ID (which will be resolved to actual ID) or negative on error
+// Errors:
+// -ENOSPC: Too many prototypes
+// -ENOMEM: Not enough memory
+int64_t parser_stage2_get_prototype_id(struct parser_stage2_context* ctx, const char* name);
 
 #endif
 

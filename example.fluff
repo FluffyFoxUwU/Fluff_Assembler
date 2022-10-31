@@ -32,12 +32,20 @@ b =loop;
 mov $r3, $r0;
 ret;
 
+ldr $r4, =test_proto;
+
 .start_prototype test_proto;
   ldr $r0, "Hello World!1";
   ldr $r1, "Hello World!2";
   ldr $r2, "Hello World!3";
+  .start_prototype test_proto_nest;
+    ldr $r0, "Hello World!1";
+    ldr $r1, "Hello World!2";
+    ldr $r2, "Hello World!3";
+  .end_prototype;
 .end_prototype;
 
+ldr $r3, =test_proto;
 ldr $r1, "yay lets go1";
 ldr $r1, "yay lets go2";
 ldr $r2, #4294967296;

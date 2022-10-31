@@ -116,6 +116,13 @@ static int stringLdr(struct statement_processor_context* ctx, int reg, const cha
   return code_emitter_emit_ldconst(ctx->stage2Context->emitter, ctx->funcEntry->udata1, reg, constIndex);
 }
 
+static int prototypeLdr(struct statement_processor_context* ctx, int reg, const char* string) {
+  int64_t prototypeTemporaryIndex = parser_stage2_get_prototype_id(ctx->stage2Context, string);
+  if (prototypeTemporaryIndex < 0)
+    return (int) prototypeTemporaryIndex;
+  return code_emitter_emit_impldep1(ctx->stage2Context->emitter, ctx->funcEntry->udata1, reg, (uint32_t) prototypeTemporaryIndex);
+}
+
 static int ins_ldr(struct statement_processor_context* ctx) {
   int res = 0;
   int reg = getRegister(ctx);
@@ -137,6 +144,9 @@ static int ins_ldr(struct statement_processor_context* ctx) {
       break;
     case TOKEN_STRING:
       res = stringLdr(ctx, reg, buffer_string(token->data.string));
+      break;
+    case TOKEN_LABEL_REF:
+      res = prototypeLdr(ctx, reg, buffer_string(token->data.string));
       break;
     default:
       setErr(ctx, false, "ins_ldr: Unknown second operand");

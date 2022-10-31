@@ -93,7 +93,9 @@ typedef int (*code_emitter_no_arg_emitter_func)(struct code_emitter* self, uint8
   X(mul, FLUFFYVM_OPCODE_MUL) \
   X(div, FLUFFYVM_OPCODE_DIV) \
   X(mod, FLUFFYVM_OPCODE_MOD) \
-  X(pow, FLUFFYVM_OPCODE_POW)
+  X(pow, FLUFFYVM_OPCODE_POW) \
+  X(impldep3, FLUFFYVM_OPCODE_IMPLDEP3) \
+  X(impldep4, FLUFFYVM_OPCODE_IMPLDEP4) \
 
 #define CODE_EMITTER_U16x2_INSTRUCTIONS \
   X(mov, FLUFFYVM_OPCODE_MOV) \
@@ -104,6 +106,9 @@ typedef int (*code_emitter_no_arg_emitter_func)(struct code_emitter* self, uint8
   
 #define CODE_EMITTER_U16_U32_INSTRUCTIONS \
   X(ldconst, FLUFFYVM_OPCODE_LOAD_CONSTANT) \
+  X(impldep1, FLUFFYVM_OPCODE_IMPLDEP1) \
+  X(impldep2, FLUFFYVM_OPCODE_IMPLDEP2) \
+  X(ldproto, FLUFFYVM_OPCODE_LOAD_PROTOTYPE) \
 
 #define CODE_EMITTER_NO_ARG_INSTRUCTIONS \
   X(nop, FLUFFYVM_OPCODE_NOP) \
