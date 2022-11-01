@@ -29,7 +29,7 @@ b =loop;
 :quit_benchmark_loop:
 
 /* Return value to use is at r0 */ 
-mov $r3, $r0;
+mov $r0, $r0;
 ret;
 
 ldr $r4, =test_proto;
