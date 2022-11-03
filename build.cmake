@@ -1,6 +1,6 @@
 # Build config
 
-set(BUILD_PROJECT_NAME "Fluff Assembler")
+set(BUILD_PROJECT_NAME "FluffAssembler")
 
 # We're making library
 set(BUILD_IS_LIBRARY NO)
