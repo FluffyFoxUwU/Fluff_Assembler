@@ -22,7 +22,7 @@ Source file
 */
 
 int main2(int argc, char** argv) {
-  if (argc < 2) {
+  if (argc < 3) {
     printf("Usage: %s <source> <result>\n", argv[0]);
     return EXIT_FAILURE;
   }
