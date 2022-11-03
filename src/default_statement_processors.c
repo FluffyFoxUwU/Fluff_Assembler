@@ -58,14 +58,28 @@ static int typeCheckedReadNext(struct statement_processor_context* ctx, struct t
 // Return 0 on sucess otherwise negative errno
 // Errors:
 // -EFAULT: Error occured
-// static int getInteger(struct statement_processor_context* ctx, int64_t* integer) {
-//   struct token* token;
-//   if (typeCheckedReadNext(ctx, &token, TOKEN_IMMEDIATE))
-//     return -EFAULT;
+static int getInteger(struct statement_processor_context* ctx, int64_t* integer) {
+  struct token* token;
+  if (typeCheckedReadNext(ctx, &token, TOKEN_IMMEDIATE) < 0)
+    return -EFAULT;
   
-//   *integer = token->data.immediate;
-//   return 0;
-// }
+  *integer = token->data.immediate;
+  return 0;
+}
+
+static int getIntegerU32(struct statement_processor_context* ctx, uint32_t* result) {
+  int64_t integer = 0;
+  int res = 0;
+  if ((res = getInteger(ctx, &integer)) < 0)
+    return res;
+  
+  if (res < 0 || res > UINT32_MAX) {
+    setErr(ctx, false, "Expected 32-bit unsigned");
+    return -EFAULT;
+  }
+  
+  return 0;
+}
 
 // Return register ID on sucess otherwise negative errno
 // Errors:
@@ -182,6 +196,18 @@ static int ins_ldr(struct statement_processor_context* ctx) {
      \
     return emitter_func(ctx->stage2Context->emitter, ctx->funcEntry->udata1, a, b, c); \
   }
+#define macro_one_reg_u16_u32_ins(name, emitter_func) \
+  static int name(struct statement_processor_context* ctx) { \
+    int a = getRegister(ctx); \
+    if (a < 0) \
+      return a; \
+    uint32_t b = 0; \
+    int bRes = getIntegerU32(ctx, &b); \
+    if (bRes < 0) \
+      return bRes; \
+     \
+    return emitter_func(ctx->stage2Context->emitter, ctx->funcEntry->udata1, a, b); \
+  }
 #define macro_no_arg_ins(name, emitter_func) \
   static int name(struct statement_processor_context* ctx) { \
     return emitter_func(ctx->stage2Context->emitter, ctx->funcEntry->udata1); \
@@ -192,6 +218,7 @@ macro_no_arg_ins(ins_ret, code_emitter_emit_ret);
 
 macro_two_reg_ins(ins_cmp, code_emitter_emit_cmp);
 macro_two_reg_ins(ins_mov, code_emitter_emit_mov);
+macro_one_reg_u16_u32_ins(ins_new_array, code_emitter_emit_new_array);
 
 macro_three_reg_ins(ins_add, code_emitter_emit_add);
 macro_three_reg_ins(ins_sub, code_emitter_emit_sub);
@@ -199,8 +226,11 @@ macro_three_reg_ins(ins_mul, code_emitter_emit_mul);
 macro_three_reg_ins(ins_div, code_emitter_emit_div);
 macro_three_reg_ins(ins_mod, code_emitter_emit_mod);
 macro_three_reg_ins(ins_pow, code_emitter_emit_pow);
+macro_three_reg_ins(ins_set_array, code_emitter_emit_set_array);
+macro_three_reg_ins(ins_get_array, code_emitter_emit_get_array);
 
 #undef macro_no_arg_ins
+#undef macro_two_reg_u16_u32_ins
 #undef macro_three_reg_ins
 #undef macro_two_reg_ins
 
@@ -246,6 +276,11 @@ static struct entry instructions[] = {
   instruction("div", ins_div)
   instruction("mod", ins_mod)
   instruction("pow", ins_pow)
+  instruction("get_array", ins_get_array)
+  instruction("set_array", ins_set_array)
+  
+  // One reg and an 32-bit unsigned arg
+  instruction("new_array", ins_new_array)
 # undef instruction
 };
 

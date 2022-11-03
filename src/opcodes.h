@@ -32,6 +32,9 @@
   X(OPCODE_IMPLDEP3, 0x10, "impldep3", 3, OP_LAYOUT_u16x3) \
   X(OPCODE_IMPLDEP4, 0x11, "impldep4", 3, OP_LAYOUT_u16x3) \
   X(OPCODE_LOAD_PROTOTYPE, 0x12, "load_constant", 3, OP_LAYOUT_u16_u32) \
+  X(OPCODE_NEW_ARRAY, 0x13, "new_array", 3, OP_LAYOUT_u16_u32) \
+  X(OPCODE_GET_ARRAY, 0x14, "get_array", 3, OP_LAYOUT_u16x3) \
+  X(OPCODE_SET_ARRAY, 0x14, "set_array", 3, OP_LAYOUT_u16x3) \
 
 /*
  * Instruction format
