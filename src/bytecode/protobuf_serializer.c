@@ -60,11 +60,16 @@ static FluffyVmFormat__Bytecode__Constant__DataCase convertConstantType(enum con
 
 static int convertConstant(FluffyVmFormat__Bytecode__Constant** resultRet, struct constant* constant) {
   FluffyVmFormat__Bytecode__Constant* result = malloc(sizeof(*result));
+  int res = 0;
   if (!result)
     return -ENOMEM;
   
   *result = (FluffyVmFormat__Bytecode__Constant) FLUFFY_VM_FORMAT__BYTECODE__CONSTANT__INIT;
   result->data_case = convertConstantType(constant->type);
+  if (result->data_case < 0) {
+    res = -EINVAL;
+    goto invalid_constant;
+  }
   
   switch (constant->type) {
     case BYTECODE_CONSTANT_INTEGER:
@@ -80,7 +85,8 @@ static int convertConstant(FluffyVmFormat__Bytecode__Constant** resultRet, struc
   }
   
   *resultRet = result;
-  return 0;
+invalid_constant:
+  return res;
 }
 
 static int convertPrototype(struct prototype* prototype, FluffyVmFormat__Bytecode__Prototype** resultRet) {
@@ -132,19 +138,23 @@ static int convertBytecode(struct bytecode* bytecode, FluffyVmFormat__Bytecode__
   result->n_constants = bytecode->constants.length;
   result->constants = calloc(bytecode->constants.length, sizeof(void*));
   
-  if (result->constants == NULL)
-    return -ENOMEM;
+  if (result->constants == NULL) {
+    res = -ENOMEM;
+    goto allocate_constants_error;
+  }
   
   int i = 0;
   struct constant* constant = NULL;
   vec_foreach_ptr(&bytecode->constants, constant, i)
     if ((res = convertConstant(&result->constants[i], constant)) < 0)
-      goto failure;
+      goto convert_constant_error;
   
   if (convertPrototype(bytecode->mainPrototype, &result->mainprototype) < 0)
-    goto failure;
+    goto convert_prototype_error;
 
-failure:
+convert_prototype_error:
+convert_constant_error:
+allocate_constants_error:
   if (res < 0) {
     freeBytecode(result);
     result = NULL;
