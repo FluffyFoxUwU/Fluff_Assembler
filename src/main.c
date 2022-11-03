@@ -21,10 +21,15 @@ Parser Stage 1
 Source file
 */
 
-int main2() {
+int main2(int argc, char** argv) {
+  if (argc < 2) {
+    printf("Usage: %s <source> <result>\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+  
   int exitRes = EXIT_SUCCESS;
-  const char* inputFile = "../example.fluff";
-  const char* outputFile = "../example.fluff_bin";
+  const char* inputFile = argv[1];
+  const char* outputFile = argv[2];
   FILE* input = NULL;
   FILE* output = NULL;
   
