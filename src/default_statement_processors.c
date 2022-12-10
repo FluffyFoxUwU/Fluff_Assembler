@@ -78,6 +78,7 @@ static int getIntegerU32(struct statement_processor_context* ctx, uint32_t* resu
     return -EFAULT;
   }
   
+  *result = (uint32_t) integer;
   return 0;
 }
 
