@@ -9,6 +9,22 @@ ldr $r2, #1;
 /* Factorial iteration count */
 ldr $r5, #16;
 
+//                 Mask   Expected
+#define OP_COND_AL 0b0000'0000
+#define OP_COND_EQ 0b0001'0001
+#define OP_COND_LT 0b0011'0010
+#define OP_COND_NE 0b0001'0000
+#define OP_COND_GT 0b0011'0000
+#define OP_COND_GE (OP_COND_GT | OP_COND_EQ)
+#define OP_COND_LE (OP_COND_LT | OP_COND_EQ)
+
+// Flag register
+0b0000
+    ||
+    |-- Equal
+    |
+    --- Less than
+
 :loop:
 :loopa:
   cmp $r1, $r0;
